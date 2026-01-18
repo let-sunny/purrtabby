@@ -140,27 +140,37 @@ describe('busMessagesGenerator', () => {
       allCallbacks: new Set(),
       messageResolvers: new Set(),
       activeIterators: 0,
+      bufferSize: 100,
+      bufferOverflow: 'oldest',
     };
 
     const generator = busMessagesGenerator(state, queue);
     let resolved = false;
 
-    const consumePromise = generator.next().then(() => {
+    const consumePromise = generator.next().then((result) => {
       resolved = true;
+      return result;
     });
 
-    // Wait a bit to ensure polling started
+    // Wait a bit to ensure generator is waiting
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(resolved).toBe(false);
 
-    // Add message (polling should detect it - line 52-58)
-    queue.messages.push({ type: 'test', tabId: 'tab1', ts: Date.now() });
+    // Add message and trigger resolver
+    const message = { type: 'test', tabId: 'tab1', ts: Date.now() };
+    queue.messages.push(message);
     
-    // Wait for polling to detect (polling happens every 100ms)
-    await new Promise(resolve => setTimeout(resolve, 150));
+    // Trigger resolver to wake up the generator
+    state.messageResolvers.forEach(resolve => resolve());
+    state.messageResolvers.clear();
 
-    await consumePromise;
+    // Wait for message to be consumed
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const result = await consumePromise;
     expect(resolved).toBe(true);
+    expect(result.done).toBe(false);
+    expect(result.value).toEqual(message);
     
     vi.useFakeTimers();
   });

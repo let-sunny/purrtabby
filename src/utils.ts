@@ -1,18 +1,32 @@
-import type { TabBusEvent, TabBusEventType, LeaderEvent, LeaderEventType } from './types.js';
+import type { TabBusEvent, TabBusEventType, LeaderEvent, LeaderEventType, BufferOverflowPolicy } from './types.js';
+
+/**
+ * Execute callbacks safely with error handling
+ * @param callbacks - Set of callback functions
+ * @param arg - Argument to pass to callbacks
+ * @param errorMessage - Error message prefix for logging
+ */
+export function executeCallbacks<T>(
+  callbacks: Set<(arg: T) => void> | undefined,
+  arg: T,
+  errorMessage: string
+): void {
+  if (!callbacks) return;
+  
+  callbacks.forEach((callback) => {
+    try {
+      callback(arg);
+    } catch (error) {
+      console.error(errorMessage, error);
+    }
+  });
+}
 
 /**
  * Generate a unique tab ID
  * @returns Unique tab identifier string
  */
 export function generateTabId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
-}
-
-/**
- * Generate a unique request ID
- * @returns Unique request identifier string
- */
-export function generateRequestId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 }
 
@@ -61,6 +75,56 @@ export function addJitter(value: number, jitterMs: number): number {
   return Math.max(0, value + jitter);
 }
 
+/**
+ * Wait for items using event-based notification
+ * @param signal - Optional AbortSignal for cancellation
+ * @param hasItems - Function to check if items exist
+ * @param resolvers - Set of resolver functions
+ * @param addResolver - Function to add a resolver
+ * @param removeResolver - Function to remove a resolver
+ * @returns Promise that resolves when items are available or signal is aborted
+ */
+export function waitForItems(
+  signal: AbortSignal | undefined,
+  hasItems: () => boolean,
+  resolvers: Set<() => void>,
+  addResolver: (resolve: () => void) => void,
+  removeResolver: (resolve: () => void) => void
+): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve();
+      return;
+    }
+
+    if (hasItems()) {
+      resolve();
+      return;
+    }
+
+    const cleanup = () => {
+      removeResolver(resolve);
+      if (signal) {
+        signal.removeEventListener('abort', onAbort);
+      }
+    };
+
+    const onAbort = () => {
+      cleanup();
+      resolve();
+    };
+
+    if (signal) {
+      signal.addEventListener('abort', onAbort);
+    }
+
+    addResolver(() => {
+      cleanup();
+      resolve();
+    });
+  });
+}
+
 /** Leader lease data structure stored in localStorage */
 export interface LeaderLease {
   tabId: string;
@@ -75,9 +139,9 @@ export interface LeaderLease {
  */
 export function readLeaderLease(key: string): LeaderLease | null {
   try {
-    const data = localStorage.getItem(key);
-    if (!data) return null;
-    return JSON.parse(data) as LeaderLease;
+    const stored = localStorage.getItem(key);
+    if (!stored) return null;
+    return JSON.parse(stored) as LeaderLease;
   } catch {
     return null;
   }
@@ -120,72 +184,35 @@ export function isValidLeaderLease(lease: LeaderLease | null): boolean {
 }
 
 /**
- * Wait for items using event-based notification
- * @param signal - Optional AbortSignal for cancellation
- * @param hasItems - Function to check if items exist
- * @param resolvers - Set of resolver functions
- * @param addResolver - Function to add a resolver
- * @param removeResolver - Function to remove a resolver
- * @returns Promise that resolves when items are available or signal is aborted
+ * Handle buffer overflow according to policy
+ * @param policy - Overflow policy: 'oldest', 'newest', or 'error'
+ * @param buffer - The buffer array
+ * @param newItem - New item to potentially add
+ * @param bufferSize - Maximum buffer size
+ * @returns Object with action: 'drop_oldest' | 'drop_newest' | 'error' | 'add', and dropped item if any
  */
-export function waitForItems(
-  signal: AbortSignal | undefined,
-  hasItems: () => boolean,
-  resolvers: Set<() => void>,
-  addResolver: (resolve: () => void) => void,
-  removeResolver: (resolve: () => void) => void
-): Promise<void> {
-  return new Promise<void>((resolve) => {
-    let checkInterval: ReturnType<typeof setTimeout> | null = null;
-    let resolved = false;
+export function handleBufferOverflow<T>(
+  policy: BufferOverflowPolicy,
+  buffer: T[],
+  newItem: T,
+  bufferSize: number
+): {
+  action: 'drop_oldest' | 'drop_newest' | 'error' | 'add';
+  dropped?: T;
+} {
+  if (buffer.length < bufferSize) {
+    return { action: 'add' };
+  }
 
-    const cleanup = () => {
-      if (resolved) return;
-      if (signal) {
-        signal.removeEventListener('abort', abortHandler);
-      }
-      removeResolver(doResolve);
-      if (checkInterval !== null) {
-        clearTimeout(checkInterval);
-        checkInterval = null;
-      }
-    };
+  if (policy === 'oldest') {
+    const dropped = buffer.shift();
+    return { action: 'drop_oldest', dropped };
+  }
 
-    const doResolve = () => {
-      if (resolved) return;
-      resolved = true;
-      cleanup();
-      resolve();
-    };
+  if (policy === 'newest') {
+    return { action: 'drop_newest', dropped: newItem };
+  }
 
-    const abortHandler = () => doResolve();
-
-    if (signal?.aborted) {
-      doResolve();
-      return;
-    }
-
-    if (signal) {
-      signal.addEventListener('abort', abortHandler);
-    }
-
-    if (hasItems()) {
-      doResolve();
-      return;
-    }
-
-    addResolver(doResolve);
-
-    if (!signal) {
-      const poll = () => {
-        if (resolved) return;
-        if (hasItems()) {
-          doResolve();
-          return;
-        }
-        checkInterval = setTimeout(poll, 100) as any;
-      };
-      poll();
-    }
-  });
+  // error policy
+  return { action: 'error' };
 }

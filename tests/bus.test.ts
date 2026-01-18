@@ -656,7 +656,9 @@ describe('TabBus', () => {
         messageCallbacks: new Map(),
         allCallbacks: new Set(),
         messageResolvers: new Set(),
-        activeIterators: 0,
+        activeIterators: 1, // Set to 1 so message is added to queue
+        bufferSize: 100,
+        bufferOverflow: 'oldest',
       };
       const messageQueue: TabBusMessage[] = [];
       
@@ -698,6 +700,63 @@ describe('TabBus', () => {
         'Error handling TabBus message:',
         expect.any(Error)
       );
+    });
+
+    it('should handle buffer overflow with error policy', () => {
+      const state: InternalBusState = {
+        channel: null,
+        tabId: 'test-tab',
+        messageCallbacks: new Map(),
+        allCallbacks: new Set(),
+        messageResolvers: new Set(),
+        activeIterators: 1,
+        bufferSize: 2,
+        bufferOverflow: 'error',
+      };
+      const messageQueue: TabBusMessage[] = [
+        { type: 'msg1', tabId: 'tab-1', ts: Date.now() },
+        { type: 'msg2', tabId: 'tab-1', ts: Date.now() },
+      ];
+      
+      const message: TabBusMessage = {
+        type: 'msg3',
+        tabId: 'test-tab',
+        ts: Date.now(),
+      };
+      
+      handleBusMessage(message, 'test-tab', state, messageQueue);
+      
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Message buffer overflow');
+      expect(messageQueue.length).toBe(2); // No new message added
+    });
+
+    it('should handle buffer overflow with newest policy', () => {
+      const state: InternalBusState = {
+        channel: null,
+        tabId: 'test-tab',
+        messageCallbacks: new Map(),
+        allCallbacks: new Set(),
+        messageResolvers: new Set(),
+        activeIterators: 1,
+        bufferSize: 2,
+        bufferOverflow: 'newest',
+      };
+      const messageQueue: TabBusMessage[] = [
+        { type: 'msg1', tabId: 'tab-1', ts: Date.now() },
+        { type: 'msg2', tabId: 'tab-1', ts: Date.now() },
+      ];
+      
+      const message: TabBusMessage = {
+        type: 'msg3',
+        tabId: 'test-tab',
+        ts: Date.now(),
+      };
+      
+      handleBusMessage(message, 'test-tab', state, messageQueue);
+      
+      expect(messageQueue.length).toBe(2); // Newest message dropped
+      expect(messageQueue[0].type).toBe('msg1');
+      expect(messageQueue[1].type).toBe('msg2');
     });
   });
 });
