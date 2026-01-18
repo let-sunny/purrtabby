@@ -1,6 +1,6 @@
 {
   "name": "purrtabby",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Lightweight browser tab communication and leader election library using BroadcastChannel and localStorage",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
