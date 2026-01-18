@@ -7,7 +7,7 @@ export interface TabBusMessage<T = any> {
 }
 
 /** TabBus event types */
-export type TabBusEventType = 'message' | 'error';
+export type TabBusEventType = 'msg' | 'err';
 
 /** TabBus event structure */
 export interface TabBusEvent {
@@ -39,7 +39,7 @@ export interface TabBus<T = any> {
 }
 
 /** Leader election event types */
-export type LeaderEventType = 'acquired' | 'lost' | 'changed';
+export type LeaderEventType = 'acquire' | 'lose' | 'change';
 
 /** Leader election event structure */
 export interface LeaderEvent {
@@ -100,4 +100,52 @@ export interface InternalLeaderState {
   eventResolvers: Set<() => void>;
   activeIterators: number;
   stopped: boolean;
+}
+
+/** RPC request message */
+export interface RPCRequest<T = any> {
+  type: 'rpc-request';
+  method: string;
+  params?: T;
+  requestId: string;
+  tabId: string;
+  ts: number;
+}
+
+/** RPC response message */
+export interface RPCResponse<T = any> {
+  type: 'rpc-response';
+  requestId: string;
+  result?: T;
+  error?: string;
+  tabId: string;
+  ts: number;
+}
+
+/** Options for createRPC() */
+export interface RPCOptions {
+  bus: TabBus;
+  timeout?: number; // Default: 5000ms
+}
+
+/** Return type of createRPC() */
+export interface RPC {
+  /** Call a method on the leader (or any tab) */
+  call<TParams = any, TResult = any>(method: string, params?: TParams, options?: { timeout?: number }): Promise<TResult>;
+  /** Handle incoming RPC requests */
+  handle<TParams = any, TResult = any>(method: string, handler: (params?: TParams) => Promise<TResult> | TResult): () => void;
+  /** Close the RPC instance and cleanup */
+  close(): void;
+}
+
+/** Internal state for RPC */
+export interface InternalRPCState {
+  bus: TabBus;
+  timeout: number;
+  pendingRequests: Map<string, {
+    resolve: (value: any) => void;
+    reject: (error: Error) => void;
+    timeout: ReturnType<typeof setTimeout>;
+  }>;
+  handlers: Map<string, (params?: any) => Promise<any> | any>;
 }
