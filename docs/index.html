@@ -166,17 +166,6 @@
       color: #1e40af;
     }
 
-    .rpc-section {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-    }
-
-    @media (max-width: 768px) {
-      .rpc-section {
-        grid-template-columns: 1fr;
-      }
-    }
   </style>
 </head>
 <body>
@@ -212,42 +201,17 @@
       <div class="event-log" id="events"></div>
     </div>
 
-    <div class="demo-section">
-      <h2>🔌 RPC - Remote Procedure Call</h2>
-      <div class="rpc-section">
-        <div>
-          <h3>Handler (Server)</h3>
-          <div class="controls">
-            <button onclick="registerHandler()">Register Handler</button>
-            <button onclick="unregisterHandler()">Unregister Handler</button>
-          </div>
-          <div id="handlerStatus" style="margin-top: 10px; padding: 10px; background: #f3f4f6; border-radius: 8px;">
-            No handler registered
-          </div>
-        </div>
-        <div>
-          <h3>Call (Client)</h3>
-          <div class="controls">
-            <button onclick="callRPC()">Call RPC</button>
-          </div>
-          <div id="rpcResult" style="margin-top: 10px; padding: 10px; background: #f3f4f6; border-radius: 8px; min-height: 50px;">
-            No result yet
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 
   <script>
     // Initialize purrtabby
-    const { createBus, createLeaderElector, createRPC } = purrtabby;
+    const { createBus, createLeaderElector } = purrtabby;
 
     const bus = createBus({ channel: 'purrtabby-demo' });
     const leader = createLeaderElector({
       key: 'purrtabby-demo-leader',
       tabId: `tab-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
     });
-    const rpc = createRPC({ bus });
 
     // Display tab ID
     document.getElementById('tabId').textContent = bus.getTabId();
@@ -325,48 +289,6 @@
       document.getElementById('startBtn').disabled = false;
       document.getElementById('stopBtn').disabled = true;
       updateLeaderStatus(false);
-    }
-
-    // RPC
-    let handlerRegistered = false;
-
-    function registerHandler() {
-      rpc.handle('demo-method', (params) => {
-        return {
-          success: true,
-          message: `Hello from ${bus.getTabId()}`,
-          params: params,
-          timestamp: Date.now(),
-        };
-      });
-      handlerRegistered = true;
-      document.getElementById('handlerStatus').textContent = `Handler registered on ${bus.getTabId()}`;
-      document.getElementById('handlerStatus').style.background = '#d1fae5';
-    }
-
-    function unregisterHandler() {
-      rpc.close();
-      handlerRegistered = false;
-      document.getElementById('handlerStatus').textContent = 'No handler registered';
-      document.getElementById('handlerStatus').style.background = '#f3f4f6';
-    }
-
-    async function callRPC() {
-      const resultDiv = document.getElementById('rpcResult');
-      resultDiv.textContent = 'Calling RPC...';
-      resultDiv.style.background = '#fef3c7';
-
-      try {
-        const result = await rpc.call('demo-method', {
-          from: bus.getTabId(),
-          message: 'Hello RPC!',
-        });
-        resultDiv.textContent = `Success: ${JSON.stringify(result, null, 2)}`;
-        resultDiv.style.background = '#d1fae5';
-      } catch (error) {
-        resultDiv.textContent = `Error: ${error.message}`;
-        resultDiv.style.background = '#fee2e2';
-      }
     }
 
     // Auto-start leader election

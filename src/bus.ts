@@ -1,6 +1,6 @@
 import type { TabBus, BusOptions, TabBusMessage, InternalBusState } from './types.js';
 import { busMessagesGenerator } from './generators.js';
-import { generateTabId, createTabBusEvent } from './utils.js';
+import { generateTabId, createTabBusEvent, handleBufferOverflow } from './utils.js';
 
 /**
  * Handle incoming message (pure function, testable)
@@ -39,11 +39,34 @@ export function handleBusMessage<T>(
     }
   });
 
-  // Add to queue for stream generators
-  messageQueue.push(message);
-  
-  state.messageResolvers.forEach((resolve) => resolve());
-  state.messageResolvers.clear();
+  // Add to queue for stream generators (only if there are active iterators)
+  if (state.activeIterators > 0) {
+    const overflowResult = handleBufferOverflow(
+      state.bufferOverflow,
+      messageQueue,
+      message,
+      state.bufferSize
+    );
+
+    if (overflowResult.action === 'error') {
+      console.error('Message buffer overflow');
+      return;
+    }
+
+    if (overflowResult.action === 'drop_newest') {
+      return; // Drop newest (current message)
+    }
+
+    if (overflowResult.action === 'drop_oldest') {
+      // Oldest already removed by handleBufferOverflow
+    }
+
+    // Add message to queue
+    messageQueue.push(message);
+    
+    state.messageResolvers.forEach((resolve) => resolve());
+    state.messageResolvers.clear();
+  }
 }
 
 /**
@@ -73,8 +96,10 @@ export function handleBusMessageEvent<T>(
  * @returns TabBus instance
  */
 export function createBus<T = any>(options: BusOptions): TabBus<T> {
-  const { channel, tabId } = options;
+  const { channel, tabId, buffer } = options;
   const finalTabId = tabId || generateTabId();
+  const bufferSize = buffer?.size ?? 100;
+  const bufferOverflow = buffer?.overflow ?? 'oldest';
 
   if (typeof BroadcastChannel === 'undefined') {
     throw new Error('BroadcastChannel is not supported in this environment');
@@ -88,6 +113,8 @@ export function createBus<T = any>(options: BusOptions): TabBus<T> {
     allCallbacks: new Set(),
     messageResolvers: new Set(),
     activeIterators: 0,
+    bufferSize,
+    bufferOverflow,
   };
 
   // Message queue for stream generators

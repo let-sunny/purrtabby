@@ -799,8 +799,10 @@ describe('LeaderElector', () => {
         eventCallbacks: new Map(),
         allCallbacks: new Set(),
         eventResolvers: new Set(),
-        activeIterators: 0,
+        activeIterators: 1, // Set to 1 so event is added to queue
         stopped: false,
+        bufferSize: 100,
+        bufferOverflow: 'oldest',
       };
       const eventQueue: LeaderEvent[] = [];
       
@@ -835,8 +837,10 @@ describe('LeaderElector', () => {
         eventCallbacks: new Map(),
         allCallbacks: new Set(),
         eventResolvers: new Set(),
-        activeIterators: 0,
+        activeIterators: 1, // Set to 1 so event is added to queue
         stopped: false,
+        bufferSize: 100,
+        bufferOverflow: 'oldest',
       };
       const eventQueue: LeaderEvent[] = [];
       

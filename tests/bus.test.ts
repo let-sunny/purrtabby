@@ -656,7 +656,9 @@ describe('TabBus', () => {
         messageCallbacks: new Map(),
         allCallbacks: new Set(),
         messageResolvers: new Set(),
-        activeIterators: 0,
+        activeIterators: 1, // Set to 1 so message is added to queue
+        bufferSize: 100,
+        bufferOverflow: 'oldest',
       };
       const messageQueue: TabBusMessage[] = [];
       

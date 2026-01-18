@@ -16,10 +16,20 @@ export interface TabBusEvent {
   meta?: Record<string, any>;
 }
 
+/** Buffer overflow policy */
+export type BufferOverflowPolicy = 'oldest' | 'newest' | 'error';
+
+/** Buffer configuration */
+export interface BufferConfig {
+  size?: number;
+  overflow?: BufferOverflowPolicy;
+}
+
 /** Options for createBus() */
 export interface BusOptions {
   channel: string;
   tabId?: string;
+  buffer?: BufferConfig;
 }
 
 /** Return type of createBus(), provides async iterables and callbacks */
@@ -55,6 +65,7 @@ export interface LeaderElectorOptions {
   leaseMs?: number;
   heartbeatMs?: number;
   jitterMs?: number;
+  buffer?: BufferConfig;
 }
 
 /** Return type of createLeaderElector() */
@@ -83,6 +94,8 @@ export interface InternalBusState<T = any> {
   allCallbacks: Set<(message: TabBusMessage<T>) => void>;
   messageResolvers: Set<() => void>;
   activeIterators: number;
+  bufferSize: number;
+  bufferOverflow: BufferOverflowPolicy;
 }
 
 /** Internal state for LeaderElector */
@@ -100,52 +113,6 @@ export interface InternalLeaderState {
   eventResolvers: Set<() => void>;
   activeIterators: number;
   stopped: boolean;
-}
-
-/** RPC request message */
-export interface RPCRequest<T = any> {
-  type: 'rpc-request';
-  method: string;
-  params?: T;
-  requestId: string;
-  tabId: string;
-  ts: number;
-}
-
-/** RPC response message */
-export interface RPCResponse<T = any> {
-  type: 'rpc-response';
-  requestId: string;
-  result?: T;
-  error?: string;
-  tabId: string;
-  ts: number;
-}
-
-/** Options for createRPC() */
-export interface RPCOptions {
-  bus: TabBus;
-  timeout?: number; // Default: 5000ms
-}
-
-/** Return type of createRPC() */
-export interface RPC {
-  /** Call a method on the leader (or any tab) */
-  call<TParams = any, TResult = any>(method: string, params?: TParams, options?: { timeout?: number }): Promise<TResult>;
-  /** Handle incoming RPC requests */
-  handle<TParams = any, TResult = any>(method: string, handler: (params?: TParams) => Promise<TResult> | TResult): () => void;
-  /** Close the RPC instance and cleanup */
-  close(): void;
-}
-
-/** Internal state for RPC */
-export interface InternalRPCState {
-  bus: TabBus;
-  timeout: number;
-  pendingRequests: Map<string, {
-    resolve: (value: any) => void;
-    reject: (error: Error) => void;
-    timeout: ReturnType<typeof setTimeout>;
-  }>;
-  handlers: Map<string, (params?: any) => Promise<any> | any>;
+  bufferSize: number;
+  bufferOverflow: BufferOverflowPolicy;
 }

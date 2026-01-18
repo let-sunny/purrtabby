@@ -14,7 +14,7 @@ A lightweight library for cross-tab communication and leader election in browser
 
 ## Highlights
 
-**Microscopic**: weighs less than 6KB minified (~2KB gzipped)
+**Microscopic**: weighs less than 7KB minified (~3KB gzipped)
 
 **Reliable**: leader election with lease-based heartbeat mechanism
 
@@ -30,7 +30,13 @@ A lightweight library for cross-tab communication and leader election in browser
 
 **[Interactive Demo →](https://let-sunny.github.io/purrtabby/)**
 
-Try purrtabby in your browser with our interactive demo. Test cross-tab communication, leader election, and RPC between multiple tabs.
+Try purrtabby in your browser with our interactive demo. Test cross-tab communication and leader election between multiple tabs.
+
+## 📚 Documentation
+
+**[Architecture Documentation →](./docs/ARCHITECTURE.md)** 
+
+Learn about purrtabby's internal architecture and design decisions.
 
 ## Features
 
@@ -131,15 +137,15 @@ if (leader.isLeader()) {
 }
 
 // Listen for leader events
-leader.on('acquired', () => {
+leader.on('acquire', () => {
   console.log('Became the leader!');
 });
 
-leader.on('lost', (event) => {
+leader.on('lose', (event) => {
   console.log('Lost leadership:', event.meta?.newLeader);
 });
 
-leader.on('changed', (event) => {
+leader.on('change', (event) => {
   console.log('Leadership changed to:', event.meta?.newLeader);
 });
 
@@ -147,11 +153,62 @@ leader.on('changed', (event) => {
 leader.stop();
 ```
 
+### Choosing Between Callback and Generator APIs
+
+purrtabby provides two ways to consume messages and events: **callbacks** and **generators**. Choose based on your needs:
+
+- **Callbacks**: Simple, event-driven, good for one-off handlers
+- **Generators**: Modern async/await patterns, better for complex flows, supports AbortSignal
+
+### Callback-based API
+
+```typescript
+const bus = createBus({ channel: 'my-channel' });
+
+// Subscribe to specific message types
+const unsubscribeMessage = bus.subscribe('user-action', (message) => {
+  console.log('Message:', message.payload);
+});
+
+// Subscribe to all messages
+const unsubscribeAll = bus.subscribeAll((message) => {
+  console.log('Any message:', message.type, message.payload);
+});
+
+// Unsubscribe when done
+unsubscribeMessage();
+unsubscribeAll();
+
+const leader = createLeaderElector({
+  key: 'my-leader',
+  tabId: 'tab-1',
+});
+
+leader.start();
+
+// Subscribe to specific leader events
+const unsubscribeAcquired = leader.on('acquire', (event) => {
+  console.log('Became leader');
+});
+
+const unsubscribeLost = leader.on('lose', (event) => {
+  console.log('Lost leadership');
+});
+
+// Subscribe to all leader events
+const unsubscribeAllEvents = leader.onAll((event) => {
+  console.log('Leader event:', event.type);
+});
+
+// Unsubscribe when done
+unsubscribeAcquired();
+unsubscribeLost();
+unsubscribeAllEvents();
+```
+
 ### Generator-based Streams
 
 ```typescript
-import { createBus, createLeaderElector } from 'purrtabby';
-
 const bus = createBus({ channel: 'my-channel' });
 
 // Consume messages as async iterable
@@ -189,52 +246,6 @@ const controller = new AbortController();
     }
   }
 })();
-```
-
-### Callback-based API
-
-```typescript
-const bus = createBus({ channel: 'my-channel' });
-
-// Subscribe to messages
-const unsubscribeMessage = bus.subscribe('type', (message) => {
-  console.log('Message:', message);
-});
-
-// Subscribe to all messages
-const unsubscribeAll = bus.subscribeAll((message) => {
-  console.log('Any message:', message);
-});
-
-// Unsubscribe when done
-unsubscribeMessage();
-unsubscribeAll();
-
-const leader = createLeaderElector({
-  key: 'my-leader',
-  tabId: 'tab-1',
-});
-
-leader.start();
-
-// Subscribe to leader events
-const unsubscribeAcquired = leader.on('acquired', (event) => {
-  console.log('Became leader');
-});
-
-const unsubscribeLost = leader.on('lost', (event) => {
-  console.log('Lost leadership');
-});
-
-// Subscribe to all leader events
-const unsubscribeAll = leader.onAll((event) => {
-  console.log('Leader event:', event.type);
-});
-
-// Unsubscribe when done
-unsubscribeAcquired();
-unsubscribeLost();
-unsubscribeAll();
 ```
 
 ## API
@@ -311,6 +322,11 @@ Creates a new LeaderElector instance for leader election.
 | `leaseMs` | `number` | `5000` | Lease duration in milliseconds |
 | `heartbeatMs` | `number` | `2000` | Heartbeat interval in milliseconds |
 | `jitterMs` | `number` | `500` | Jitter range to avoid synchronization |
+| `buffer` | `BufferConfig` | `{ size: 100, overflow: 'oldest' }` | Buffer configuration for stream generators |
+
+**BufferConfig:**
+- `size`: Maximum queue size (default: 100)
+- `overflow`: Overflow policy - `'oldest'` (drop oldest), `'newest'` (drop newest), or `'error'` (throw error)
 
 #### LeaderElector Methods
 
@@ -331,9 +347,9 @@ Returns `true` if this tab is currently the leader.
 Subscribes to a specific leader event. Returns an unsubscribe function.
 
 Events:
-- `'acquired'` - This tab became the leader
-- `'lost'` - This tab lost leadership
-- `'changed'` - Leadership changed to another tab
+- `'acquire'` - This tab became the leader
+- `'lose'` - This tab lost leadership
+- `'change'` - Leadership changed to another tab
 
 ##### `onAll(handler)`
 
@@ -369,13 +385,13 @@ const leader = createLeaderElector({
 leader.start();
 
 // Handle leader events
-leader.on('acquired', () => {
+leader.on('acquire', () => {
   console.log('This tab is now the leader');
   // Only the leader performs certain tasks
   bus.publish('leader-announcement', { tabId: leader.getTabId() });
 });
 
-leader.on('lost', () => {
+leader.on('lose', () => {
   console.log('This tab is no longer the leader');
 });
 
@@ -397,7 +413,9 @@ leader.stop();
 bus.close();
 ```
 
-### Using with purrcat (WebSocket)
+### Using with [purrcat](https://www.npmjs.com/package/purrcat) (WebSocket)
+
+> **[📖 Full WebSocket Usage Guide →](./docs/WEBSOCKET-USAGE.md)** - Learn how to share WebSocket connections across tabs, implement request-response patterns, and handle edge cases.
 
 ```typescript
 import createSocket from 'purrcat';
@@ -412,7 +430,7 @@ const leader = createLeaderElector({
 leader.start();
 
 // Only the leader maintains WebSocket connection
-leader.on('acquired', () => {
+leader.on('acquire', () => {
   const socket = createSocket({
     url: 'wss://api.example.com/ws',
   });

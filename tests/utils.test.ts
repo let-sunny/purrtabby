@@ -1,23 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { generateTabId, generateRequestId, createTabBusEvent, createLeaderEvent, addJitter } from '../src/utils.js';
+import { generateTabId, createTabBusEvent, createLeaderEvent, addJitter } from '../src/utils.js';
 
 describe('Utils', () => {
   describe('generateTabId', () => {
     it('should generate unique tab IDs', () => {
       const id1 = generateTabId();
       const id2 = generateTabId();
-      
-      expect(id1).toBeTruthy();
-      expect(id2).toBeTruthy();
-      expect(id1).not.toBe(id2);
-      expect(typeof id1).toBe('string');
-    });
-  });
-
-  describe('generateRequestId', () => {
-    it('should generate unique request IDs', () => {
-      const id1 = generateRequestId();
-      const id2 = generateRequestId();
       
       expect(id1).toBeTruthy();
       expect(id2).toBeTruthy();

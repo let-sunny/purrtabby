@@ -1,6 +1,6 @@
 import type { LeaderElector, LeaderElectorOptions, InternalLeaderState, LeaderEvent, LeaderEventType } from './types.js';
 import { leaderEventsGenerator } from './generators.js';
-import { createLeaderEvent, addJitter, readLeaderLease, writeLeaderLease, removeLeaderLease, isValidLeaderLease, type LeaderLease } from './utils.js';
+import { createLeaderEvent, addJitter, readLeaderLease, writeLeaderLease, removeLeaderLease, isValidLeaderLease, handleBufferOverflow, type LeaderLease } from './utils.js';
 
 /**
  * Emit an event to all callbacks (pure function, testable)
@@ -34,10 +34,33 @@ export function emitLeaderEvent(
     }
   });
 
-  // Add to queue for stream generators
-  eventQueue.push(event);
-  state.eventResolvers.forEach((resolve) => resolve());
-  state.eventResolvers.clear();
+  // Add to queue for stream generators (only if there are active iterators)
+  if (state.activeIterators > 0) {
+    const overflowResult = handleBufferOverflow(
+      state.bufferOverflow,
+      eventQueue,
+      event,
+      state.bufferSize
+    );
+
+    if (overflowResult.action === 'error') {
+      console.error('Event buffer overflow');
+      return;
+    }
+
+    if (overflowResult.action === 'drop_newest') {
+      return; // Drop newest (current event)
+    }
+
+    if (overflowResult.action === 'drop_oldest') {
+      // Oldest already removed by handleBufferOverflow
+    }
+
+    // Add event to queue
+    eventQueue.push(event);
+    state.eventResolvers.forEach((resolve) => resolve());
+    state.eventResolvers.clear();
+  }
 }
 
 /**
@@ -86,10 +109,10 @@ export function tryAcquireLeadership(
   // Lost leadership
   if (state.isLeader) {
     state.isLeader = false;
-    emitLeaderEvent(createLeaderEvent('lose', { 
-      tabId: state.tabId,
-      newLeader: currentLease?.tabId,
-    }), state, eventQueue);
+      emitLeaderEvent(createLeaderEvent('lose', { 
+        tabId: state.tabId,
+        newLeader: currentLease?.tabId,
+      }), state, eventQueue);
   }
 
   return false;
@@ -142,10 +165,10 @@ export function checkLeaderLeadership(
     emitLeaderEvent(createLeaderEvent('acquire', { tabId: state.tabId }), state, eventQueue);
   } else if (wasLeader && !isNowLeader) {
     state.isLeader = false;
-    emitLeaderEvent(createLeaderEvent('lose', { 
-      tabId: state.tabId,
-      newLeader: currentLease?.tabId,
-    }), state, eventQueue);
+      emitLeaderEvent(createLeaderEvent('lose', { 
+        tabId: state.tabId,
+        newLeader: currentLease?.tabId,
+      }), state, eventQueue);
   } else if (wasLeader && isNowLeader && currentLease?.tabId !== state.tabId) {
     // Leadership changed to another tab
     emitLeaderEvent(createLeaderEvent('change', {
@@ -167,7 +190,10 @@ export function createLeaderElector(options: LeaderElectorOptions): LeaderElecto
     leaseMs = 5000,
     heartbeatMs = 2000,
     jitterMs = 500,
+    buffer,
   } = options;
+  const bufferSize = buffer?.size ?? 100;
+  const bufferOverflow = buffer?.overflow ?? 'oldest';
 
   if (typeof localStorage === 'undefined') {
     throw new Error('localStorage is not supported in this environment');
@@ -187,6 +213,8 @@ export function createLeaderElector(options: LeaderElectorOptions): LeaderElecto
     eventResolvers: new Set(),
     activeIterators: 0,
     stopped: false,
+    bufferSize,
+    bufferOverflow,
   };
 
   // Event queue for stream generators
