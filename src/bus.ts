@@ -1,8 +1,77 @@
 import type { TabBus, BusOptions, TabBusMessage, InternalBusState } from './types.js';
-import { generateTabId, createTabBusEvent } from './utils.js';
 import { busMessagesGenerator } from './generators.js';
+import { generateTabId, createTabBusEvent } from './utils.js';
 
-/** Create a TabBus instance for cross-tab communication */
+/**
+ * Handle incoming message (pure function, testable)
+ * @param message - TabBus message
+ * @param tabId - Current tab ID
+ * @param state - Internal bus state
+ * @param messageQueue - Message queue for streaming
+ */
+export function handleBusMessage<T>(
+  message: TabBusMessage<T>,
+  tabId: string,
+  state: InternalBusState<T>,
+  messageQueue: TabBusMessage<T>[]
+): void {
+  // Allow receiving own messages (for leader-follower pattern)
+  // All tabs use the same code, leader receives its own messages
+
+  // Notify type-specific callbacks
+  const typeCallbacks = state.messageCallbacks.get(message.type);
+  if (typeCallbacks) {
+    typeCallbacks.forEach((callback) => {
+      try {
+        callback(message);
+      } catch (error) {
+        console.error('Error in TabBus callback:', error);
+      }
+    });
+  }
+
+  // Notify all-message callbacks
+  state.allCallbacks.forEach((callback) => {
+    try {
+      callback(message);
+    } catch (error) {
+      console.error('Error in TabBus all callback:', error);
+    }
+  });
+
+  // Add to queue for stream generators
+  messageQueue.push(message);
+  
+  state.messageResolvers.forEach((resolve) => resolve());
+  state.messageResolvers.clear();
+}
+
+/**
+ * Handle message event with error handling (pure function, testable)
+ * @param event - MessageEvent from BroadcastChannel
+ * @param tabId - Current tab ID
+ * @param state - Internal bus state
+ * @param messageQueue - Message queue for streaming
+ */
+export function handleBusMessageEvent<T>(
+  event: MessageEvent,
+  tabId: string,
+  state: InternalBusState<T>,
+  messageQueue: TabBusMessage<T>[]
+): void {
+  try {
+    const message: TabBusMessage<T> = event.data;
+    handleBusMessage(message, tabId, state, messageQueue);
+  } catch (error) {
+    console.error('Error handling TabBus message:', error);
+  }
+}
+
+/**
+ * Create a TabBus instance for cross-tab communication
+ * @param options - Bus configuration options
+ * @returns TabBus instance
+ */
 export function createBus<T = any>(options: BusOptions): TabBus<T> {
   const { channel, tabId } = options;
   const finalTabId = tabId || generateTabId();
@@ -26,47 +95,11 @@ export function createBus<T = any>(options: BusOptions): TabBus<T> {
 
   // Handle incoming messages
   bc.onmessage = (event: MessageEvent) => {
-    try {
-      const message: TabBusMessage<T> = event.data;
-      
-      // Ignore messages from self
-      if (message.tabId === finalTabId) {
-        return;
-      }
-
-      // Notify type-specific callbacks
-      const typeCallbacks = state.messageCallbacks.get(message.type);
-      if (typeCallbacks) {
-        typeCallbacks.forEach((callback) => {
-          try {
-            callback(message);
-          } catch (error) {
-            console.error('Error in TabBus callback:', error);
-          }
-        });
-      }
-
-      // Notify all-message callbacks
-      state.allCallbacks.forEach((callback) => {
-        try {
-          callback(message);
-        } catch (error) {
-          console.error('Error in TabBus all callback:', error);
-        }
-      });
-
-      // Add to queue for stream generators
-      messageQueue.push(message);
-      
-      state.messageResolvers.forEach((resolve) => resolve());
-      state.messageResolvers.clear();
-    } catch (error) {
-      console.error('Error handling TabBus message:', error);
-    }
+    handleBusMessageEvent(event, finalTabId, state, messageQueue);
   };
 
   bc.onmessageerror = () => {
-    const errorEvent = createTabBusEvent('error', {
+    const errorEvent = createTabBusEvent('err', {
       error: 'Failed to receive message',
     });
     // Could emit error event if needed
@@ -81,6 +114,12 @@ export function createBus<T = any>(options: BusOptions): TabBus<T> {
         ts: Date.now(),
       };
       bc.postMessage(message);
+      
+      // BroadcastChannel doesn't deliver to self, so handle locally
+      // This allows leader to receive its own messages (leader-follower pattern)
+      setTimeout(() => {
+        handleBusMessage(message, finalTabId, state, messageQueue);
+      }, 0);
     },
 
     subscribe(type: string, handler: (message: TabBusMessage<T>) => void): () => void {

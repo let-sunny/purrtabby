@@ -11,7 +11,13 @@ interface EventQueue {
   events: LeaderEvent[];
 }
 
-/** Generator for TabBus messages */
+/**
+ * Async generator for TabBus messages
+ * @param state - Internal bus state
+ * @param queue - Message queue
+ * @param signal - Optional AbortSignal for cancellation
+ * @yields TabBus messages
+ */
 export async function* busMessagesGenerator<T = any>(
   state: InternalBusState<T>,
   queue: MessageQueue,
@@ -44,7 +50,13 @@ export async function* busMessagesGenerator<T = any>(
   }
 }
 
-/** Generator for LeaderElector events */
+/**
+ * Async generator for Leader events
+ * @param state - Internal leader state
+ * @param queue - Event queue
+ * @param signal - Optional AbortSignal for cancellation
+ * @yields Leader events
+ */
 export async function* leaderEventsGenerator(
   state: InternalLeaderState,
   queue: EventQueue,
