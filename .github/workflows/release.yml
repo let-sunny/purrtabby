@@ -1,0 +1,71 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Required for Trusted Publishing (OIDC)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for tag verification
+
+      - name: Verify release tag is on main branch
+        run: |
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          if ! git branch -r --contains "$TAG_NAME" | grep -q "origin/main"; then
+            echo "Error: Release tag $TAG_NAME is not on main branch"
+            exit 1
+          fi
+          echo "✓ Release tag $TAG_NAME is on main branch"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.13.0'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Install dependencies first
+        run: npm ci --ignore-scripts
+
+      - name: Extract version from release tag
+        id: version
+        run: |
+          # Get version from release tag (remove 'v' prefix if present)
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          VERSION=${TAG_NAME#v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release tag: $TAG_NAME"
+          echo "Extracted version: $VERSION"
+
+      - name: Update package.json version
+        run: |
+          npm version ${{ steps.version.outputs.VERSION }} --no-git-tag-version --allow-same-version
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify build artifacts
+        run: |
+          test -f dist/index.cjs || exit 1
+          test -f dist/index.js || exit 1
+          test -f dist/index.d.ts || exit 1
+          test -f dist/index.global.js || exit 1
+
+      - name: Publish to npm
+        run: npm publish --access public --provenance
+        # Uses Trusted Publishing (OIDC) - no token needed if configured in npm
