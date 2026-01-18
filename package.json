@@ -1,0 +1,62 @@
+{
+  "name": "purrtabby",
+  "version": "0.1.0",
+  "description": "Lightweight browser tab communication and leader election library using BroadcastChannel and localStorage",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "unpkg": "dist/index.global.js",
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm,iife --dts --minify --globalName purrtabby",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run build && npm test",
+    "version": "npm run build"
+  },
+  "keywords": [
+    "broadcastchannel",
+    "tab",
+    "communication",
+    "leader-election",
+    "localstorage",
+    "inter-tab",
+    "cross-tab",
+    "pub-sub",
+    "rpc",
+    "typescript",
+    "async-iterable",
+    "generator"
+  ],
+  "author": "minseon",
+  "license": "MIT",
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^2.0.0",
+    "@vitest/coverage-v8": "^2.0.0",
+    "@types/node": "^20.0.0",
+    "jsdom": "^24.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "volta": {
+    "node": "24.13.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/let-sunny/purrtabby.git"
+  },
+  "bugs": {
+    "url": "https://github.com/let-sunny/purrtabby/issues"
+  },
+  "homepage": "https://github.com/let-sunny/purrtabby#readme"
+}
