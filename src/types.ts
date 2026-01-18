@@ -116,3 +116,13 @@ export interface InternalLeaderState {
   bufferSize: number;
   bufferOverflow: BufferOverflowPolicy;
 }
+
+/** Message queue for TabBus stream */
+export interface MessageQueue {
+  messages: TabBusMessage[];
+}
+
+/** Event queue for LeaderElector stream */
+export interface EventQueue {
+  events: LeaderEvent[];
+}

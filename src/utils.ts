@@ -1,6 +1,28 @@
 import type { TabBusEvent, TabBusEventType, LeaderEvent, LeaderEventType, BufferOverflowPolicy } from './types.js';
 
 /**
+ * Execute callbacks safely with error handling
+ * @param callbacks - Set of callback functions
+ * @param arg - Argument to pass to callbacks
+ * @param errorMessage - Error message prefix for logging
+ */
+export function executeCallbacks<T>(
+  callbacks: Set<(arg: T) => void> | undefined,
+  arg: T,
+  errorMessage: string
+): void {
+  if (!callbacks) return;
+  
+  callbacks.forEach((callback) => {
+    try {
+      callback(arg);
+    } catch (error) {
+      console.error(errorMessage, error);
+    }
+  });
+}
+
+/**
  * Generate a unique tab ID
  * @returns Unique tab identifier string
  */

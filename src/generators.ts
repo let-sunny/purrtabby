@@ -1,15 +1,5 @@
-import type { TabBusMessage, InternalBusState, LeaderEvent, InternalLeaderState } from './types.js';
+import type { TabBusMessage, InternalBusState, LeaderEvent, InternalLeaderState, MessageQueue, EventQueue } from './types.js';
 import { waitForItems } from './utils.js';
-
-/** Message queue for TabBus stream */
-interface MessageQueue {
-  messages: TabBusMessage[];
-}
-
-/** Event queue for LeaderElector stream */
-interface EventQueue {
-  events: LeaderEvent[];
-}
 
 /**
  * Async generator for TabBus messages

@@ -1,6 +1,6 @@
 import type { TabBus, BusOptions, TabBusMessage, InternalBusState } from './types.js';
 import { busMessagesGenerator } from './generators.js';
-import { generateTabId, createTabBusEvent, handleBufferOverflow } from './utils.js';
+import { generateTabId, createTabBusEvent, handleBufferOverflow, executeCallbacks } from './utils.js';
 
 /**
  * Handle incoming message (pure function, testable)
@@ -20,53 +20,39 @@ export function handleBusMessage<T>(
 
   // Notify type-specific callbacks
   const typeCallbacks = state.messageCallbacks.get(message.type);
-  if (typeCallbacks) {
-    typeCallbacks.forEach((callback) => {
-      try {
-        callback(message);
-      } catch (error) {
-        console.error('Error in TabBus callback:', error);
-      }
-    });
-  }
+  executeCallbacks(typeCallbacks, message, 'Error in TabBus callback:');
 
   // Notify all-message callbacks
-  state.allCallbacks.forEach((callback) => {
-    try {
-      callback(message);
-    } catch (error) {
-      console.error('Error in TabBus all callback:', error);
-    }
-  });
+  executeCallbacks(state.allCallbacks, message, 'Error in TabBus all callback:');
 
   // Add to queue for stream generators (only if there are active iterators)
-  if (state.activeIterators > 0) {
-    const overflowResult = handleBufferOverflow(
-      state.bufferOverflow,
-      messageQueue,
-      message,
-      state.bufferSize
-    );
+  if (state.activeIterators === 0) return;
 
-    if (overflowResult.action === 'error') {
-      console.error('Message buffer overflow');
-      return;
-    }
+  const overflowResult = handleBufferOverflow(
+    state.bufferOverflow,
+    messageQueue,
+    message,
+    state.bufferSize
+  );
 
-    if (overflowResult.action === 'drop_newest') {
-      return; // Drop newest (current message)
-    }
-
-    if (overflowResult.action === 'drop_oldest') {
-      // Oldest already removed by handleBufferOverflow
-    }
-
-    // Add message to queue
-    messageQueue.push(message);
-    
-    state.messageResolvers.forEach((resolve) => resolve());
-    state.messageResolvers.clear();
+  if (overflowResult.action === 'error') {
+    console.error('Message buffer overflow');
+    return;
   }
+
+  if (overflowResult.action === 'drop_newest') {
+    return; // Drop newest (current message)
+  }
+
+  if (overflowResult.action === 'drop_oldest') {
+    // Oldest already removed by handleBufferOverflow
+  }
+
+  // Add message to queue
+  messageQueue.push(message);
+  
+  state.messageResolvers.forEach((resolve) => resolve());
+  state.messageResolvers.clear();
 }
 
 /**
@@ -144,9 +130,9 @@ export function createBus<T = any>(options: BusOptions): TabBus<T> {
       
       // BroadcastChannel doesn't deliver to self, so handle locally
       // This allows leader to receive its own messages (leader-follower pattern)
-      setTimeout(() => {
+      queueMicrotask(() => {
         handleBusMessage(message, finalTabId, state, messageQueue);
-      }, 0);
+      });
     },
 
     subscribe(type: string, handler: (message: TabBusMessage<T>) => void): () => void {

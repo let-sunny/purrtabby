@@ -1,6 +1,6 @@
 import type { LeaderElector, LeaderElectorOptions, InternalLeaderState, LeaderEvent, LeaderEventType } from './types.js';
 import { leaderEventsGenerator } from './generators.js';
-import { createLeaderEvent, addJitter, readLeaderLease, writeLeaderLease, removeLeaderLease, isValidLeaderLease, handleBufferOverflow, type LeaderLease } from './utils.js';
+import { createLeaderEvent, addJitter, readLeaderLease, writeLeaderLease, removeLeaderLease, isValidLeaderLease, handleBufferOverflow, executeCallbacks, type LeaderLease } from './utils.js';
 
 /**
  * Emit an event to all callbacks (pure function, testable)
@@ -15,52 +15,38 @@ export function emitLeaderEvent(
 ): void {
   // Notify type-specific callbacks
   const typeCallbacks = state.eventCallbacks.get(event.type);
-  if (typeCallbacks) {
-    typeCallbacks.forEach((callback) => {
-      try {
-        callback(event);
-      } catch (error) {
-        console.error('Error in LeaderElector callback:', error);
-      }
-    });
-  }
+  executeCallbacks(typeCallbacks, event, 'Error in LeaderElector callback:');
 
   // Notify all-event callbacks
-  state.allCallbacks.forEach((callback) => {
-    try {
-      callback(event);
-    } catch (error) {
-      console.error('Error in LeaderElector all callback:', error);
-    }
-  });
+  executeCallbacks(state.allCallbacks, event, 'Error in LeaderElector all callback:');
 
   // Add to queue for stream generators (only if there are active iterators)
-  if (state.activeIterators > 0) {
-    const overflowResult = handleBufferOverflow(
-      state.bufferOverflow,
-      eventQueue,
-      event,
-      state.bufferSize
-    );
+  if (state.activeIterators === 0) return;
 
-    if (overflowResult.action === 'error') {
-      console.error('Event buffer overflow');
-      return;
-    }
+  const overflowResult = handleBufferOverflow(
+    state.bufferOverflow,
+    eventQueue,
+    event,
+    state.bufferSize
+  );
 
-    if (overflowResult.action === 'drop_newest') {
-      return; // Drop newest (current event)
-    }
-
-    if (overflowResult.action === 'drop_oldest') {
-      // Oldest already removed by handleBufferOverflow
-    }
-
-    // Add event to queue
-    eventQueue.push(event);
-    state.eventResolvers.forEach((resolve) => resolve());
-    state.eventResolvers.clear();
+  if (overflowResult.action === 'error') {
+    console.error('Event buffer overflow');
+    return;
   }
+
+  if (overflowResult.action === 'drop_newest') {
+    return; // Drop newest (current event)
+  }
+
+  if (overflowResult.action === 'drop_oldest') {
+    // Oldest already removed by handleBufferOverflow
+  }
+
+  // Add event to queue
+  eventQueue.push(event);
+  state.eventResolvers.forEach((resolve) => resolve());
+  state.eventResolvers.clear();
 }
 
 /**
@@ -220,15 +206,32 @@ export function createLeaderElector(options: LeaderElectorOptions): LeaderElecto
   // Event queue for stream generators
   const eventQueue: LeaderEvent[] = [];
 
+
+  if (typeof window !== 'undefined') {
+    // Listen to storage events for cross-tab communication
+    window.addEventListener('storage', handleStorageEvent);
+
+    // Register page unload handlers for automatic cleanup
+    // Use pagehide for better reliability (works in mobile browsers too)
+    window.addEventListener('pagehide', handlePageUnload);
+    // Fallback to beforeunload for older browsers
+    window.addEventListener('beforeunload', handlePageUnload);
+  }
+
   /** Handle storage events from other tabs */
   function handleStorageEvent(e: StorageEvent): void {
     if (e.key !== state.key || e.storageArea !== localStorage) return;
     checkLeaderLeadership(state, eventQueue);
   }
 
-  // Listen to storage events for cross-tab communication
-  if (typeof window !== 'undefined') {
-    window.addEventListener('storage', handleStorageEvent);
+  /** Handle page unload - cleanup leadership if we're the leader */
+  function handlePageUnload(): void {
+    if (state.isLeader) {
+      const currentLease = readLeaderLease(state.key);
+      if (currentLease?.tabId === state.tabId) {
+        removeLeaderLease(state.key);
+      }
+    }
   }
 
   const leader: LeaderElector = {
@@ -281,6 +284,8 @@ export function createLeaderElector(options: LeaderElectorOptions): LeaderElecto
       // Remove storage event listener
       if (typeof window !== 'undefined') {
         window.removeEventListener('storage', handleStorageEvent);
+        window.removeEventListener('pagehide', handlePageUnload);
+        window.removeEventListener('beforeunload', handlePageUnload);
       }
     },
 

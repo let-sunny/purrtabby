@@ -12,6 +12,7 @@
 8. [Design Decisions](#design-decisions)
 9. [Performance Considerations](#performance-considerations)
 10. [Conclusion](#conclusion)
+11. [Appendix: Detailed Leader Election Algorithm](#appendix-detailed-leader-election-algorithm)
 
 ---
 
@@ -154,7 +155,7 @@ Pure function that handles BroadcastChannel message events:
 
 ### Self-Message Handling
 
-By default, `BroadcastChannel` does not deliver messages to the sending tab. To support the leader-follower pattern where all tabs use the same code, we explicitly call `handleBusMessage()` for self-messages using `setTimeout(0)`.
+By default, `BroadcastChannel` does not deliver messages to the sending tab. To support the leader-follower pattern where all tabs use the same code, we explicitly call `handleBusMessage()` for self-messages using `queueMicrotask()` to defer execution to the next microtask.
 
 ---
 
@@ -170,6 +171,14 @@ By default, `BroadcastChannel` does not deliver messages to the sending tab. To 
 
 ### Leader Lease Structure
 
+**What is a Lease?**
+
+A **lease** is a time-limited "contract" that grants a tab the right to be the leader. Think of it like renting an apartment:
+- The lease has an expiration time
+- The leader must renew the lease periodically (via heartbeat) to maintain leadership
+- If the lease expires, any tab can acquire leadership
+- This ensures that if a leader tab crashes or closes, another tab can take over automatically
+
 ```typescript
 interface LeaderLease {
   tabId: string;      // ID of the leader tab
@@ -177,6 +186,13 @@ interface LeaderLease {
   leaseMs: number;     // Lease duration in milliseconds
 }
 ```
+
+The lease is stored in `localStorage` and contains:
+- **tabId**: Which tab is currently the leader
+- **timestamp**: When the lease was last updated (used to calculate expiration)
+- **leaseMs**: How long the lease is valid (default: 5000ms = 5 seconds)
+
+A lease is considered **expired** when: `timestamp + leaseMs < Date.now()`
 
 ### Election Flow
 
@@ -438,3 +454,203 @@ Key strengths:
 - **Modern**: Uses async iterables and TypeScript
 - **Reliable**: Lease-based heartbeat ensures fault tolerance
 - **Simple**: Clear separation of concerns and explicit dependencies
+
+---
+
+## Appendix: Detailed Leader Election Algorithm
+
+This section provides a step-by-step explanation of how leader election works in purrtabby.
+
+### Overview
+
+Leader election uses a **lease-based mechanism** stored in `localStorage`. The lease contains:
+- `tabId`: Identifier of the current leader tab
+- `timestamp`: When the lease was last updated
+- `leaseMs`: Duration the lease is valid (default: 5000ms)
+
+### Step-by-Step: Acquiring Leadership
+
+When `leader.start()` is called, the following process occurs:
+
+#### Step 1: Initial Acquisition Attempt
+
+```typescript
+tryAcquireLeadership(state, eventQueue)
+```
+
+1. **Read current lease** from localStorage:
+   ```typescript
+   const currentLease = readLeaderLease(state.key);
+   ```
+
+2. **Check if lease is valid**:
+   ```typescript
+   isValidLeaderLease(currentLease)
+   // Returns false if:
+   // - lease is null/undefined
+   // - lease.timestamp + lease.leaseMs < Date.now() (expired)
+   ```
+
+3. **If lease is invalid (no leader or expired)**:
+   - Create new lease with current tab's ID:
+     ```typescript
+     const newLease = {
+       tabId: state.tabId,
+       timestamp: Date.now(),
+       leaseMs: state.leaseMs,
+     };
+     writeLeaderLease(state.key, newLease);
+     ```
+   - **Double-check**: Read back the lease to verify we got it
+     - This handles race conditions when multiple tabs try simultaneously
+     - Only one tab will successfully write (last write wins)
+   - If `acquiredLease.tabId === state.tabId`:
+     - Set `state.isLeader = true`
+     - Emit `'acquire'` event
+     - Return `true`
+
+4. **If lease is valid and belongs to this tab**:
+   - Set `state.isLeader = true` (if not already)
+   - Emit `'acquire'` event (if wasn't leader before)
+   - Return `true`
+
+5. **If lease is valid but belongs to another tab**:
+   - If we were leader before, emit `'lose'` event
+   - Set `state.isLeader = false`
+   - Return `false`
+
+### Step-by-Step: Maintaining Leadership (Heartbeat)
+
+Once a tab becomes leader, it must periodically renew its lease:
+
+#### Heartbeat Timer
+
+```typescript
+setInterval(() => {
+  sendLeaderHeartbeat(state, eventQueue);
+}, heartbeatMs + jitter);
+```
+
+**Heartbeat Process** (`sendLeaderHeartbeat`):
+
+1. **Check preconditions**:
+   ```typescript
+   if (state.stopped || !state.isLeader) return;
+   ```
+
+2. **Read current lease**:
+   ```typescript
+   const currentLease = readLeaderLease(state.key);
+   ```
+
+3. **If lease still belongs to this tab**:
+   - Update timestamp:
+     ```typescript
+     const updatedLease = {
+       ...currentLease,
+       timestamp: Date.now(),
+     };
+     writeLeaderLease(state.key, updatedLease);
+     ```
+   - Lease is renewed for another `leaseMs` duration
+
+4. **If lease belongs to another tab**:
+   - Set `state.isLeader = false`
+   - Emit `'lose'` event
+   - This can happen if:
+     - Another tab acquired leadership
+     - Tab was inactive and lease expired
+
+### Step-by-Step: Detecting Leadership Changes (Polling)
+
+Non-leader tabs periodically check for leadership opportunities:
+
+#### Check Timer
+
+```typescript
+setInterval(() => {
+  checkLeaderLeadership(state, eventQueue);
+}, heartbeatMs / 2 + jitter);
+```
+
+**Check Process** (`checkLeaderLeadership`):
+
+1. **Read current lease**:
+   ```typescript
+   const currentLease = readLeaderLease(state.key);
+   ```
+
+2. **Determine current state**:
+   ```typescript
+   const wasLeader = state.isLeader;
+   const isNowLeader = currentLease?.tabId === state.tabId 
+                     && isValidLeaderLease(currentLease);
+   ```
+
+3. **Handle state transitions**:
+   - **Became leader** (`!wasLeader && isNowLeader`):
+     - Set `state.isLeader = true`
+     - Emit `'acquire'` event
+   
+   - **Lost leadership** (`wasLeader && !isNowLeader`):
+     - Set `state.isLeader = false`
+     - Emit `'lose'` event with `newLeader` metadata
+   
+   - **Leadership changed** (`wasLeader && isNowLeader && currentLease.tabId !== state.tabId`):
+     - This case is logically impossible (if `isNowLeader`, then `currentLease.tabId === state.tabId`)
+     - Emit `'change'` event (edge case handling)
+
+### Race Condition Handling
+
+**Problem**: Multiple tabs might try to acquire leadership simultaneously.
+
+**Solution**: Double-check pattern:
+1. Write lease to localStorage
+2. Immediately read it back
+3. Only consider leadership acquired if read value matches our tabId
+
+This ensures only one tab succeeds even in race conditions.
+
+### Lease Expiration
+
+A lease expires when:
+```typescript
+lease.timestamp + lease.leaseMs < Date.now()
+```
+
+**Expired lease handling**:
+- Any tab can acquire leadership when lease expires
+- Leader must renew before expiration (via heartbeat)
+- If leader tab crashes/closes, lease expires and another tab can take over
+
+### Example Timeline
+
+```
+Time 0ms:   Tab A starts, acquires leadership (lease expires at 5000ms)
+Time 2000ms: Tab A sends heartbeat (lease expires at 7000ms)
+Time 3000ms: Tab B starts, sees valid lease (Tab A is leader)
+Time 4000ms: Tab A sends heartbeat (lease expires at 9000ms)
+Time 5000ms: Tab A closes/crashes
+Time 6000ms: Tab B checks, sees expired lease, acquires leadership
+Time 8000ms: Tab B sends heartbeat (lease expires at 13000ms)
+```
+
+### Key Design Decisions
+
+1. **Why localStorage?**
+   - Synchronous API (no async overhead)
+   - Shared across all tabs in same origin
+   - Persists across page reloads (with expiration)
+
+2. **Why double-check?**
+   - Handles race conditions when multiple tabs compete
+   - Ensures only one tab succeeds
+
+3. **Why heartbeat?**
+   - Proves leader is still alive
+   - Prevents stale leadership if leader tab crashes
+
+4. **Why polling?**
+   - Detects leadership changes
+   - Allows non-leaders to acquire when lease expires
+   - Storage events help but polling ensures reliability

@@ -16,13 +16,17 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createLeaderElector } from '../src/index.js';
-import { checkLeaderLeadership, sendLeaderHeartbeat, tryAcquireLeadership } from '../src/leader.js';
+import { checkLeaderLeadership, sendLeaderHeartbeat, tryAcquireLeadership, emitLeaderEvent } from '../src/leader.js';
+import { createLeaderEvent } from '../src/utils.js';
 import { readLeaderLease } from '../src/utils.js';
 import type { InternalLeaderState, LeaderEvent } from '../src/types.js';
 
 describe('LeaderElector', () => {
+  let consoleErrorSpy: any;
+
   beforeEach(() => {
     vi.useFakeTimers();
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     if (typeof localStorage !== 'undefined') {
       localStorage.clear();
     }
@@ -33,6 +37,7 @@ describe('LeaderElector', () => {
     if (typeof localStorage !== 'undefined') {
       localStorage.clear();
     }
+    consoleErrorSpy?.mockRestore();
   });
 
   describe('Instance Creation', () => {
@@ -871,6 +876,219 @@ describe('LeaderElector', () => {
       
       // Should return null on parse error (line 34)
       expect(result).toBe(null);
+      
+      localStorage.removeItem('test-key');
+    });
+
+    it('should automatically cleanup lease on pagehide event when leader', () => {
+      const leader = createLeaderElector({
+        key: 'test-unload-key',
+        tabId: 'tab-leader',
+        leaseMs: 5000,
+        heartbeatMs: 1000,
+        jitterMs: 0,
+      });
+
+      leader.start();
+
+      // Wait a bit for leadership acquisition
+      vi.advanceTimersByTime(100);
+
+      // Verify we're the leader and lease exists
+      expect(leader.isLeader()).toBe(true);
+      const leaseBefore = readLeaderLease('test-unload-key');
+      expect(leaseBefore).toBeDefined();
+      expect(leaseBefore?.tabId).toBe('tab-leader');
+
+      // Simulate pagehide event
+      const pagehideEvent = new Event('pagehide');
+      window.dispatchEvent(pagehideEvent);
+
+      // Verify lease was removed
+      const leaseAfter = readLeaderLease('test-unload-key');
+      expect(leaseAfter).toBeNull();
+
+      leader.stop();
+      localStorage.removeItem('test-unload-key');
+    });
+
+    it('should automatically cleanup lease on beforeunload event when leader', () => {
+      const leader = createLeaderElector({
+        key: 'test-beforeunload-key',
+        tabId: 'tab-leader-2',
+        leaseMs: 5000,
+        heartbeatMs: 1000,
+        jitterMs: 0,
+      });
+
+      leader.start();
+
+      // Wait a bit for leadership acquisition
+      vi.advanceTimersByTime(100);
+
+      // Verify we're the leader and lease exists
+      expect(leader.isLeader()).toBe(true);
+      const leaseBefore = readLeaderLease('test-beforeunload-key');
+      expect(leaseBefore).toBeDefined();
+      expect(leaseBefore?.tabId).toBe('tab-leader-2');
+
+      // Simulate beforeunload event
+      const beforeunloadEvent = new Event('beforeunload');
+      window.dispatchEvent(beforeunloadEvent);
+
+      // Verify lease was removed
+      const leaseAfter = readLeaderLease('test-beforeunload-key');
+      expect(leaseAfter).toBeNull();
+
+      leader.stop();
+      localStorage.removeItem('test-beforeunload-key');
+    });
+
+    it('should not cleanup lease on pagehide when not leader', () => {
+      const leader1 = createLeaderElector({
+        key: 'test-nonleader-key',
+        tabId: 'tab-leader-3',
+        leaseMs: 5000,
+        heartbeatMs: 1000,
+        jitterMs: 0,
+      });
+
+      leader1.start();
+      vi.advanceTimersByTime(100);
+
+      // leader1 is leader
+      expect(leader1.isLeader()).toBe(true);
+
+      const leaseBefore = readLeaderLease('test-nonleader-key');
+      expect(leaseBefore?.tabId).toBe('tab-leader-3');
+
+      // Stop leader1 first to remove its event listeners
+      leader1.stop();
+
+      // Create a new leader instance that is not the leader
+      const leader2 = createLeaderElector({
+        key: 'test-nonleader-key',
+        tabId: 'tab-follower',
+        leaseMs: 5000,
+        heartbeatMs: 1000,
+        jitterMs: 0,
+      });
+
+      // Set up lease manually to simulate leader1 being leader
+      localStorage.setItem('test-nonleader-key', JSON.stringify({
+        tabId: 'tab-leader-3',
+        timestamp: Date.now(),
+        leaseMs: 5000,
+      }));
+
+      // leader2 is not the leader
+      expect(leader2.isLeader()).toBe(false);
+
+      // Simulate pagehide event - leader2's handler should not remove lease
+      // since it's not the leader
+      const pagehideEvent = new Event('pagehide');
+      window.dispatchEvent(pagehideEvent);
+
+      // Lease should still exist (belongs to leader1, leader2 didn't remove it)
+      const leaseAfter = readLeaderLease('test-nonleader-key');
+      expect(leaseAfter).toBeDefined();
+      expect(leaseAfter?.tabId).toBe('tab-leader-3');
+
+      leader2.stop();
+      localStorage.removeItem('test-nonleader-key');
+    });
+
+    it('should handle buffer overflow with error policy in emitLeaderEvent', () => {
+      const state: InternalLeaderState = {
+        key: 'test-key',
+        tabId: 'tab-1',
+        leaseMs: 5000,
+        heartbeatMs: 1000,
+        jitterMs: 500,
+        isLeader: false,
+        heartbeatTimer: null,
+        checkTimer: null,
+        eventCallbacks: new Map(),
+        allCallbacks: new Set(),
+        eventResolvers: new Set(),
+        activeIterators: 1,
+        stopped: false,
+        bufferSize: 2,
+        bufferOverflow: 'error',
+      };
+      const eventQueue: LeaderEvent[] = [
+        createLeaderEvent('acquire', { tabId: 'tab-1' }),
+        createLeaderEvent('lose', { tabId: 'tab-1' }),
+      ];
+      
+      const event = createLeaderEvent('change', { tabId: 'tab-1', newLeader: 'tab-2' });
+      emitLeaderEvent(event, state, eventQueue);
+      
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Event buffer overflow');
+      expect(eventQueue.length).toBe(2); // No new event added
+    });
+
+    it('should handle buffer overflow with newest policy in emitLeaderEvent', () => {
+      const state: InternalLeaderState = {
+        key: 'test-key',
+        tabId: 'tab-1',
+        leaseMs: 5000,
+        heartbeatMs: 1000,
+        jitterMs: 500,
+        isLeader: false,
+        heartbeatTimer: null,
+        checkTimer: null,
+        eventCallbacks: new Map(),
+        allCallbacks: new Set(),
+        eventResolvers: new Set(),
+        activeIterators: 1,
+        stopped: false,
+        bufferSize: 2,
+        bufferOverflow: 'newest',
+      };
+      const eventQueue: LeaderEvent[] = [
+        createLeaderEvent('acquire', { tabId: 'tab-1' }),
+        createLeaderEvent('lose', { tabId: 'tab-1' }),
+      ];
+      
+      const event = createLeaderEvent('change', { tabId: 'tab-1', newLeader: 'tab-2' });
+      emitLeaderEvent(event, state, eventQueue);
+      
+      expect(eventQueue.length).toBe(2); // Newest event dropped
+    });
+
+    it('should not emit acquire event when already leader in tryAcquireLeadership', () => {
+      const state: InternalLeaderState = {
+        key: 'test-key',
+        tabId: 'tab-1',
+        leaseMs: 5000,
+        heartbeatMs: 1000,
+        jitterMs: 500,
+        isLeader: true, // Already leader
+        heartbeatTimer: null,
+        checkTimer: null,
+        eventCallbacks: new Map(),
+        allCallbacks: new Set(),
+        eventResolvers: new Set(),
+        activeIterators: 1,
+        stopped: false,
+        bufferSize: 100,
+        bufferOverflow: 'oldest',
+      };
+      const eventQueue: LeaderEvent[] = [];
+      
+      // Set up localStorage with valid lease for this tab
+      localStorage.setItem('test-key', JSON.stringify({
+        tabId: 'tab-1',
+        timestamp: Date.now(),
+        leaseMs: 5000,
+      }));
+      
+      const result = tryAcquireLeadership(state, eventQueue);
+      
+      expect(result).toBe(true);
+      expect(state.isLeader).toBe(true);
+      expect(eventQueue.length).toBe(0); // No event emitted since already leader
       
       localStorage.removeItem('test-key');
     });
