@@ -26,6 +26,12 @@ A lightweight library for cross-tab communication and leader election in browser
 
 **Flexible**: callback-based or generator-based APIs, your choice
 
+## 🎮 Try It Live
+
+**[Interactive Demo →](https://let-sunny.github.io/purrtabby/)**
+
+Try purrtabby in your browser with our interactive demo. Test cross-tab communication, leader election, and RPC between multiple tabs.
+
 ## Features
 
 - **Cross-tab communication** using BroadcastChannel
