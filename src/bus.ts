@@ -1,6 +1,11 @@
 import type { TabBus, BusOptions, TabBusMessage, InternalBusState } from './types.js';
 import { busMessagesGenerator } from './generators.js';
-import { generateTabId, createTabBusEvent, handleBufferOverflow, executeCallbacks } from './utils.js';
+import {
+  generateTabId,
+  createTabBusEvent,
+  handleBufferOverflow,
+  executeCallbacks,
+} from './utils.js';
 
 /**
  * Handle incoming message (pure function, testable)
@@ -50,7 +55,7 @@ export function handleBusMessage<T>(
 
   // Add message to queue
   messageQueue.push(message);
-  
+
   state.messageResolvers.forEach((resolve) => resolve());
   state.messageResolvers.clear();
 }
@@ -81,7 +86,7 @@ export function handleBusMessageEvent<T>(
  * @param options - Bus configuration options
  * @returns TabBus instance
  */
-export function createBus<T = any>(options: BusOptions): TabBus<T> {
+export function createBus<T = unknown>(options: BusOptions): TabBus<T> {
   const { channel, tabId, buffer } = options;
   const finalTabId = tabId || generateTabId();
   const bufferSize = buffer?.size ?? 100;
@@ -112,7 +117,7 @@ export function createBus<T = any>(options: BusOptions): TabBus<T> {
   };
 
   bc.onmessageerror = () => {
-    const errorEvent = createTabBusEvent('err', {
+    const _errorEvent = createTabBusEvent('err', {
       error: 'Failed to receive message',
     });
     // Could emit error event if needed
@@ -127,7 +132,7 @@ export function createBus<T = any>(options: BusOptions): TabBus<T> {
         ts: Date.now(),
       };
       bc.postMessage(message);
-      
+
       // BroadcastChannel doesn't deliver to self, so handle locally
       // This allows leader to receive its own messages (leader-follower pattern)
       queueMicrotask(() => {

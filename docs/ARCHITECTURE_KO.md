@@ -74,16 +74,19 @@ src/
 ### 모듈 책임
 
 #### `index.ts`
+
 - 공개 API 내보내기: `createBus()`, `createLeaderElector()`
 - TypeScript 사용자를 위한 타입 재내보내기
 
 #### `bus.ts`
+
 - `createBus()`: TabBus 인스턴스를 생성하는 팩토리 함수
 - `handleBusMessage()`: 들어오는 메시지를 처리하는 순수 함수
 - `handleBusMessageEvent()`: BroadcastChannel 이벤트를 처리하는 순수 함수
 - publish/subscribe/stream API를 가진 TabBus 구현
 
 #### `leader.ts`
+
 - `createLeaderElector()`: LeaderElector 인스턴스를 생성하는 팩토리 함수
 - `tryAcquireLeadership()`: 리더십 획득을 시도하는 순수 함수
 - `sendLeaderHeartbeat()`: 하트비트를 전송하는 순수 함수
@@ -92,10 +95,12 @@ src/
 - start/stop/stream API를 가진 LeaderElector 구현
 
 #### `generators.ts`
+
 - `busMessagesGenerator()`: TabBus 메시지용 비동기 제너레이터
 - `leaderEventsGenerator()`: 리더 이벤트용 비동기 제너레이터
 
 #### `utils.ts`
+
 - `generateTabId()`: 고유한 탭 식별자 생성
 - `createTabBusEvent()`: TabBus 이벤트 객체 생성
 - `createLeaderEvent()`: 리더 이벤트 객체 생성
@@ -105,6 +110,7 @@ src/
 - `isValidLeaderLease()`: 리더 리스 검증
 
 #### `types.ts`
+
 - 모든 공개 및 내부 API에 대한 TypeScript 인터페이스 및 타입
 
 ---
@@ -141,14 +147,18 @@ handleBusMessage() (순수 함수)
 ### 주요 함수
 
 #### `handleBusMessage()`
+
 메시지를 처리하는 순수 함수:
+
 - 타입별 콜백에 알림
 - 전체 메시지 콜백에 알림
 - 스트림 제너레이터를 위한 메시지를 큐에 추가
 - 대기 중인 제너레이터 해결
 
 #### `handleBusMessageEvent()`
+
 BroadcastChannel 메시지 이벤트를 처리하는 순수 함수:
+
 - 이벤트에서 메시지 파싱
 - 에러 처리를 포함하여 `handleBusMessage()` 호출
 - 파싱 실패 시 에러 이벤트 발생
@@ -174,6 +184,7 @@ BroadcastChannel 메시지 이벤트를 처리하는 순수 함수:
 **리스(Lease)란 무엇인가?**
 
 **리스(lease)**는 탭에게 리더가 될 권리를 부여하는 시간 제한 "계약"입니다. 아파트를 임대하는 것과 비슷합니다:
+
 - 리스에는 만료 시간이 있습니다
 - 리더는 리더십을 유지하기 위해 주기적으로 리스를 갱신해야 합니다 (하트비트를 통해)
 - 리스가 만료되면 어떤 탭이든 리더십을 획득할 수 있습니다
@@ -181,13 +192,14 @@ BroadcastChannel 메시지 이벤트를 처리하는 순수 함수:
 
 ```typescript
 interface LeaderLease {
-  tabId: string;      // 리더 탭의 ID
-  timestamp: number;   // 리스가 생성/업데이트된 시점
-  leaseMs: number;     // 밀리초 단위의 리스 지속 시간
+  tabId: string; // 리더 탭의 ID
+  timestamp: number; // 리스가 생성/업데이트된 시점
+  leaseMs: number; // 밀리초 단위의 리스 지속 시간
 }
 ```
 
 리스는 `localStorage`에 저장되며 다음을 포함합니다:
+
 - **tabId**: 현재 리더인 탭
 - **timestamp**: 리스가 마지막으로 업데이트된 시간 (만료 계산에 사용)
 - **leaseMs**: 리스가 유효한 기간 (기본값: 5000ms = 5초)
@@ -239,7 +251,7 @@ sendLeaderHeartbeat() {
 // 매 checkInterval 밀리초마다
 checkLeaderLeadership() {
   const currentLease = readLeaderLease()
-  
+
   if (currentLease가 유효하고 currentLease.tabId === this.tabId) {
     // 우리가 리더임
     if (!wasLeader) {
@@ -258,19 +270,25 @@ checkLeaderLeadership() {
 ### 주요 함수
 
 #### `tryAcquireLeadership()`
+
 리더십 획득을 시도하는 순수 함수:
+
 - localStorage에서 현재 리스 읽기
 - 리스가 없거나 만료된 경우 새 리스 작성
 - 리더십이 획득되면 true 반환
 
 #### `sendLeaderHeartbeat()`
+
 하트비트를 전송하는 순수 함수:
+
 - 여전히 리더인지 확인
 - 유효한 경우 리스 타임스탬프 업데이트
 - 리더십이 상실된 경우 'lose' 이벤트 발생
 
 #### `checkLeaderLeadership()`
+
 리더십 상태를 확인하는 순수 함수:
+
 - 현재 리스 읽기
 - 자신의 tabId와 비교
 - 적절한 이벤트 발생 ('acquire', 'lose', 'change')
@@ -290,7 +308,7 @@ async function* busMessagesGenerator(state, queue, signal?) {
       while (queue.messages.length > 0) {
         yield queue.messages.shift()!;
       }
-      
+
       // 새 메시지 대기
       await waitForItems(signal, ...);
     }
@@ -311,6 +329,7 @@ async function* busMessagesGenerator(state, queue, signal?) {
 ### 대기 메커니즘
 
 `waitForItems()`는 이벤트 기반 알림 시스템을 사용합니다:
+
 - 대기 시 리졸버를 Set에 추가
 - 항목이 도착하면 해결 (via `forEach(resolve)`)
 - 중단 또는 항목 도착 시 리졸버 정리
@@ -319,6 +338,7 @@ async function* busMessagesGenerator(state, queue, signal?) {
 ### 다중 이터레이터
 
 여러 이터레이터가 동일한 스트림에서 소비할 수 있습니다:
+
 - 각 이터레이터가 `activeIterators`를 증가시킴
 - 메시지/이벤트는 읽는 첫 번째 이터레이터가 소비함
 - 큐는 마지막 이터레이터가 종료될 때만 정리됨
@@ -449,6 +469,7 @@ localStorage에서 리스 읽기
 purrtabby는 단순성과 경량을 염두에 두고 설계되었습니다. 순수 함수를 사용한 함수형 프로그래밍 접근 방식은 코드를 테스트하고 유지보수하기 쉽게 만듭니다. 제너레이터 기반 스트림은 메시지와 이벤트를 소비하기 위한 현대적인 API를 제공하며, 리스 기반 리더 선출은 탭 간 안정적인 조정을 보장합니다.
 
 주요 강점:
+
 - **경량**: 최소한의 번들 크기
 - **테스트 가능**: 순수 함수로 포괄적인 테스트 가능
 - **현대적**: 비동기 이터러블과 TypeScript 사용
@@ -464,6 +485,7 @@ purrtabby는 단순성과 경량을 염두에 두고 설계되었습니다. 순�
 ### 개요
 
 리더 선출은 `localStorage`에 저장된 **리스(lease) 기반 메커니즘**을 사용합니다. 리스는 다음을 포함합니다:
+
 - `tabId`: 현재 리더 탭의 식별자
 - `timestamp`: 리스가 마지막으로 업데이트된 시간
 - `leaseMs`: 리스가 유효한 지속 시간 (기본값: 5000ms)
@@ -475,17 +497,19 @@ purrtabby는 단순성과 경량을 염두에 두고 설계되었습니다. 순�
 #### 1단계: 초기 획득 시도
 
 ```typescript
-tryAcquireLeadership(state, eventQueue)
+tryAcquireLeadership(state, eventQueue);
 ```
 
 1. **현재 리스 읽기** (localStorage에서):
+
    ```typescript
    const currentLease = readLeaderLease(state.key);
    ```
 
 2. **리스 유효성 확인**:
+
    ```typescript
-   isValidLeaderLease(currentLease)
+   isValidLeaderLease(currentLease);
    // 다음 경우 false 반환:
    // - lease가 null/undefined
    // - lease.timestamp + lease.leaseMs < Date.now() (만료됨)
@@ -534,11 +558,13 @@ setInterval(() => {
 **하트비트 과정** (`sendLeaderHeartbeat`):
 
 1. **전제 조건 확인**:
+
    ```typescript
    if (state.stopped || !state.isLeader) return;
    ```
 
 2. **현재 리스 읽기**:
+
    ```typescript
    const currentLease = readLeaderLease(state.key);
    ```
@@ -568,34 +594,36 @@ setInterval(() => {
 #### 체크 타이머
 
 ```typescript
-setInterval(() => {
-  checkLeaderLeadership(state, eventQueue);
-}, heartbeatMs / 2 + jitter);
+setInterval(
+  () => {
+    checkLeaderLeadership(state, eventQueue);
+  },
+  heartbeatMs / 2 + jitter
+);
 ```
 
 **체크 과정** (`checkLeaderLeadership`):
 
 1. **현재 리스 읽기**:
+
    ```typescript
    const currentLease = readLeaderLease(state.key);
    ```
 
 2. **현재 상태 결정**:
+
    ```typescript
    const wasLeader = state.isLeader;
-   const isNowLeader = currentLease?.tabId === state.tabId 
-                     && isValidLeaderLease(currentLease);
+   const isNowLeader = currentLease?.tabId === state.tabId && isValidLeaderLease(currentLease);
    ```
 
 3. **상태 전환 처리**:
    - **리더가 됨** (`!wasLeader && isNowLeader`):
      - `state.isLeader = true` 설정
      - `'acquire'` 이벤트 발생
-   
    - **리더십 상실** (`wasLeader && !isNowLeader`):
      - `state.isLeader = false` 설정
      - `newLeader` 메타데이터와 함께 `'lose'` 이벤트 발생
-   
    - **리더십 변경** (`wasLeader && isNowLeader && currentLease.tabId !== state.tabId`):
      - 이 경우는 논리적으로 불가능 (만약 `isNowLeader`라면 `currentLease.tabId === state.tabId`)
      - `'change'` 이벤트 발생 (엣지 케이스 처리)
@@ -605,6 +633,7 @@ setInterval(() => {
 **문제**: 여러 탭이 동시에 리더십을 획득하려고 시도할 수 있습니다.
 
 **해결**: 이중 확인 패턴:
+
 1. localStorage에 리스 쓰기
 2. 즉시 다시 읽기
 3. 읽은 값이 우리의 tabId와 일치할 때만 리더십 획득으로 간주
@@ -614,11 +643,13 @@ setInterval(() => {
 ### 리스 만료
 
 리스는 다음 경우에 만료됩니다:
+
 ```typescript
-lease.timestamp + lease.leaseMs < Date.now()
+lease.timestamp + lease.leaseMs < Date.now();
 ```
 
 **만료된 리스 처리**:
+
 - 리스가 만료되면 어떤 탭이든 리더십을 획득할 수 있음
 - 리더는 만료 전에 리스를 갱신해야 함 (하트비트를 통해)
 - 리더 탭이 크래시/종료되면 리스가 만료되고 다른 탭이 인수할 수 있음

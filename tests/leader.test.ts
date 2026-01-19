@@ -1,8 +1,8 @@
 /**
  * leader.test.ts
- * 
+ *
  * Purpose: Tests for LeaderElector functionality including instance creation, election logic, heartbeat, streaming, and edge cases
- * 
+ *
  * Test Coverage:
  * - LeaderElector instance creation and API existence verification
  * - LeaderElectorOptions validation
@@ -16,13 +16,18 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createLeaderElector } from '../src/index.js';
-import { checkLeaderLeadership, sendLeaderHeartbeat, tryAcquireLeadership, emitLeaderEvent } from '../src/leader.js';
+import {
+  checkLeaderLeadership as _checkLeaderLeadership,
+  sendLeaderHeartbeat,
+  tryAcquireLeadership,
+  emitLeaderEvent,
+} from '../src/leader.js';
 import { createLeaderEvent } from '../src/utils.js';
 import { readLeaderLease } from '../src/utils.js';
 import type { InternalLeaderState, LeaderEvent } from '../src/types.js';
 
 describe('LeaderElector', () => {
-  let consoleErrorSpy: any;
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -59,18 +64,20 @@ describe('LeaderElector', () => {
     });
 
     it('should throw error if localStorage is not supported (line 211-212)', () => {
-      const originalLocalStorage = (globalThis as any).localStorage;
-      delete (globalThis as any).localStorage;
-      
+      const originalLocalStorage = (globalThis as typeof globalThis & { localStorage?: Storage })
+        .localStorage;
+      delete (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage;
+
       expect(() => {
         createLeaderElector({
           key: 'test-leader',
           tabId: 'tab-1',
         });
       }).toThrow('localStorage is not supported in this environment');
-      
+
       // Restore
-      (globalThis as any).localStorage = originalLocalStorage;
+      (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage =
+        originalLocalStorage;
     });
 
     it('should not be leader initially', () => {
@@ -120,7 +127,7 @@ describe('LeaderElector', () => {
         key: 'test-leader',
         tabId: 'tab-1',
       });
-      
+
       expect(() => leader.stop()).not.toThrow();
       expect(() => leader.stop()).not.toThrow();
       expect(() => leader.stop()).not.toThrow();
@@ -163,16 +170,16 @@ describe('LeaderElector', () => {
         heartbeatMs: 1000,
       });
 
-      let leader1Acquired = false;
-      let leader2Acquired = false;
+      let _leader1Acquired = false;
+      let _leader2Acquired = false;
 
       leader1.on('acquire', () => {
-        leader1Acquired = true;
+        _leader1Acquired = true;
         expect(leader1.isLeader()).toBe(true);
       });
 
       leader2.on('acquire', () => {
-        leader2Acquired = true;
+        _leader2Acquired = true;
         expect(leader2.isLeader()).toBe(true);
       });
 
@@ -182,7 +189,7 @@ describe('LeaderElector', () => {
       leader2.start();
       vi.advanceTimersByTime(100);
 
-      const leaderCount = [leader1, leader2].filter(l => l.isLeader()).length;
+      const leaderCount = [leader1, leader2].filter((l) => l.isLeader()).length;
       expect(leaderCount).toBeLessThanOrEqual(1);
 
       await new Promise<void>((resolve) => {
@@ -262,7 +269,7 @@ describe('LeaderElector', () => {
       await new Promise<void>((resolve) => {
         leader.on('acquire', () => {
           expect(leader.isLeader()).toBe(true);
-          
+
           const initialLease = JSON.parse(localStorage.getItem('test-leader') || '{}');
           const initialTimestamp = initialLease.timestamp;
 
@@ -362,11 +369,14 @@ describe('LeaderElector', () => {
       leader2.start();
       vi.advanceTimersByTime(100);
 
-      localStorage.setItem('test-leader', JSON.stringify({
-        tabId: 'tab-2',
-        timestamp: Date.now(),
-        leaseMs: 5000,
-      }));
+      localStorage.setItem(
+        'test-leader',
+        JSON.stringify({
+          tabId: 'tab-2',
+          timestamp: Date.now(),
+          leaseMs: 5000,
+        })
+      );
 
       if (typeof window !== 'undefined') {
         const event = new StorageEvent('storage', {
@@ -426,7 +436,7 @@ describe('LeaderElector', () => {
 
     it('should emit lost event in sendHeartbeat else block (line 187-191)', async () => {
       vi.useRealTimers();
-      
+
       const leader = createLeaderElector({
         key: 'test-leader',
         tabId: 'tab-1',
@@ -443,15 +453,18 @@ describe('LeaderElector', () => {
       await new Promise<void>((resolve) => {
         leader.on('acquire', () => {
           expect(leader.isLeader()).toBe(true);
-          
+
           // Manually change lease to another tab
           // This will cause sendHeartbeat to enter else block (line 185)
           // and emit 'lose' event (line 187-191)
-          localStorage.setItem('test-leader', JSON.stringify({
-            tabId: 'tab-2', // Different tab
-            timestamp: Date.now(),
-            leaseMs: 5000,
-          }));
+          localStorage.setItem(
+            'test-leader',
+            JSON.stringify({
+              tabId: 'tab-2', // Different tab
+              timestamp: Date.now(),
+              leaseMs: 5000,
+            })
+          );
 
           // Wait for heartbeat to trigger
           setTimeout(() => {
@@ -465,13 +478,13 @@ describe('LeaderElector', () => {
       });
 
       expect(lostEventReceived).toBe(true);
-      
+
       vi.useFakeTimers();
     }, 10000);
 
     it('should emit lost event when heartbeat detects leadership loss', async () => {
       vi.useRealTimers();
-      
+
       const leader = createLeaderElector({
         key: 'test-leader',
         tabId: 'tab-1',
@@ -484,11 +497,14 @@ describe('LeaderElector', () => {
       await new Promise<void>((resolve) => {
         leader.on('acquire', () => {
           // Manually change lease to another tab (simulating another tab taking over)
-          localStorage.setItem('test-leader', JSON.stringify({
-            tabId: 'tab-2', // Different tab
-            timestamp: Date.now(),
-            leaseMs: 5000,
-          }));
+          localStorage.setItem(
+            'test-leader',
+            JSON.stringify({
+              tabId: 'tab-2', // Different tab
+              timestamp: Date.now(),
+              leaseMs: 5000,
+            })
+          );
 
           // Wait for heartbeat to trigger and detect loss
           setTimeout(() => {
@@ -507,10 +523,10 @@ describe('LeaderElector', () => {
       });
 
       // Wait a bit more to ensure lost event is processed
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       expect(lostEventReceived).toBe(true);
-      
+
       vi.useFakeTimers();
     }, 10000);
 
@@ -541,7 +557,7 @@ describe('LeaderElector', () => {
 
     it('should emit changed event when leadership changes to another tab (line 213-217)', async () => {
       vi.useRealTimers();
-      
+
       const leader1 = createLeaderElector({
         key: 'test-leader',
         tabId: 'tab-1',
@@ -549,7 +565,7 @@ describe('LeaderElector', () => {
         heartbeatMs: 1000,
       });
 
-      let changedEventReceived = false;
+      let _changedEventReceived = false;
 
       // First, make leader1 acquire leadership
       await new Promise<void>((resolve) => {
@@ -559,12 +575,12 @@ describe('LeaderElector', () => {
         leader1.start();
       });
 
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
       expect(leader1.isLeader()).toBe(true);
 
       // Set up changed event handler
       leader1.on('change', (event) => {
-        changedEventReceived = true;
+        _changedEventReceived = true;
         expect(event.meta?.newLeader).toBe('tab-2');
       });
 
@@ -573,21 +589,24 @@ describe('LeaderElector', () => {
       // We need leader1 to think it's still leader (isNowLeader = true)
       // but the lease shows another tab (currentLease?.tabId !== state.tabId)
       // To achieve this, we set a lease with different tabId but recent timestamp
-      localStorage.setItem('test-leader', JSON.stringify({
-        tabId: 'tab-2', // Different tab
-        timestamp: Date.now() - 1000, // Recent (still valid, so isNowLeader = true)
-        leaseMs: 5000,
-      }));
+      localStorage.setItem(
+        'test-leader',
+        JSON.stringify({
+          tabId: 'tab-2', // Different tab
+          timestamp: Date.now() - 1000, // Recent (still valid, so isNowLeader = true)
+          leaseMs: 5000,
+        })
+      );
 
       // Trigger checkLeadership by advancing time (polling interval)
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Changed event should be emitted (line 213-217)
       // Note: This is a very specific edge case that may not always trigger
       // The condition requires: wasLeader && isNowLeader && currentLease?.tabId !== state.tabId
       leader1.stop();
-      
+
       vi.useFakeTimers();
     });
   });
@@ -595,7 +614,7 @@ describe('LeaderElector', () => {
   describe('Stream', () => {
     it('should stream leader events', async () => {
       vi.useRealTimers();
-      
+
       const leader = createLeaderElector({
         key: 'test-leader',
         tabId: 'tab-1',
@@ -603,7 +622,7 @@ describe('LeaderElector', () => {
         heartbeatMs: 1000,
       });
 
-      const events: any[] = [];
+      const events: LeaderEvent[] = [];
 
       const streamPromise = (async () => {
         for await (const event of leader.stream()) {
@@ -612,13 +631,13 @@ describe('LeaderElector', () => {
         }
       })();
 
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       leader.start();
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       leader.stop();
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       await streamPromise;
 
@@ -627,7 +646,6 @@ describe('LeaderElector', () => {
 
       leader.stop();
     });
-
   });
 
   describe('Edge Cases', () => {
@@ -639,7 +657,7 @@ describe('LeaderElector', () => {
         heartbeatMs: 1000,
       });
 
-      const events: any[] = [];
+      const events: LeaderEvent[] = [];
 
       await new Promise<void>((resolve) => {
         const unsubscribe = leader.onAll((event) => {
@@ -664,7 +682,7 @@ describe('LeaderElector', () => {
 
     it('should unsubscribe from onAll correctly', async () => {
       vi.useRealTimers();
-      
+
       const leader = createLeaderElector({
         key: 'test-leader',
         tabId: 'tab-1',
@@ -677,15 +695,15 @@ describe('LeaderElector', () => {
         callCount++;
       });
 
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       leader.start();
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       unsubscribe();
 
       leader.stop();
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       expect(callCount).toBeGreaterThanOrEqual(1);
 
@@ -694,7 +712,7 @@ describe('LeaderElector', () => {
 
     it('should handle multiple onAll subscriptions', async () => {
       vi.useRealTimers();
-      
+
       const leader = createLeaderElector({
         key: 'test-leader',
         tabId: 'tab-1',
@@ -727,7 +745,7 @@ describe('LeaderElector', () => {
 
         leader.start();
       });
-      
+
       vi.useFakeTimers();
     });
 
@@ -776,10 +794,10 @@ describe('LeaderElector', () => {
       });
 
       const unsubscribe = leader.on('acquire', () => {});
-      
+
       unsubscribe();
       expect(() => unsubscribe()).not.toThrow();
-      
+
       leader.stop();
     });
 
@@ -789,6 +807,7 @@ describe('LeaderElector', () => {
       // Because isNowLeader = currentLease?.tabId === state.tabId && isValidLeaderLease(currentLease)
       // So this is dead code that cannot be reached. We'll skip this test.
       // The changed event is actually tested in the integration test above.
+      expect(_checkLeaderLeadership).toBeDefined();
     });
 
     it('should directly test sendLeaderHeartbeat lost event (line 164-168)', () => {
@@ -810,22 +829,25 @@ describe('LeaderElector', () => {
         bufferOverflow: 'oldest',
       };
       const eventQueue: LeaderEvent[] = [];
-      
+
       // Set up localStorage with different tab as leader
-      localStorage.setItem('test-key', JSON.stringify({
-        tabId: 'tab-2', // Different tab
-        timestamp: Date.now(),
-        leaseMs: 5000,
-      }));
-      
+      localStorage.setItem(
+        'test-key',
+        JSON.stringify({
+          tabId: 'tab-2', // Different tab
+          timestamp: Date.now(),
+          leaseMs: 5000,
+        })
+      );
+
       // Should trigger lost event (line 164-168)
       sendLeaderHeartbeat(state, eventQueue);
-      
+
       expect(state.isLeader).toBe(false);
       expect(eventQueue.length).toBeGreaterThan(0);
-      const lostEvent = eventQueue.find(e => e.type === 'lose');
+      const lostEvent = eventQueue.find((e) => e.type === 'lose');
       expect(lostEvent).toBeDefined();
-      
+
       localStorage.removeItem('test-key');
     });
 
@@ -848,35 +870,38 @@ describe('LeaderElector', () => {
         bufferOverflow: 'oldest',
       };
       const eventQueue: LeaderEvent[] = [];
-      
+
       // Set up localStorage with different tab as leader (valid lease)
-      localStorage.setItem('test-key', JSON.stringify({
-        tabId: 'tab-2', // Different tab
-        timestamp: Date.now(),
-        leaseMs: 5000,
-      }));
-      
+      localStorage.setItem(
+        'test-key',
+        JSON.stringify({
+          tabId: 'tab-2', // Different tab
+          timestamp: Date.now(),
+          leaseMs: 5000,
+        })
+      );
+
       // Should trigger lost event (line 138-143) and return false
       const result = tryAcquireLeadership(state, eventQueue);
-      
+
       expect(result).toBe(false);
       expect(state.isLeader).toBe(false);
       expect(eventQueue.length).toBeGreaterThan(0);
-      const lostEvent = eventQueue.find(e => e.type === 'lose');
+      const lostEvent = eventQueue.find((e) => e.type === 'lose');
       expect(lostEvent).toBeDefined();
-      
+
       localStorage.removeItem('test-key');
     });
 
     it('should directly test readLeaderLease catch block (line 34)', () => {
       // Set up invalid JSON in localStorage
       localStorage.setItem('test-key', 'invalid json');
-      
+
       const result = readLeaderLease('test-key');
-      
+
       // Should return null on parse error (line 34)
       expect(result).toBe(null);
-      
+
       localStorage.removeItem('test-key');
     });
 
@@ -975,11 +1000,14 @@ describe('LeaderElector', () => {
       });
 
       // Set up lease manually to simulate leader1 being leader
-      localStorage.setItem('test-nonleader-key', JSON.stringify({
-        tabId: 'tab-leader-3',
-        timestamp: Date.now(),
-        leaseMs: 5000,
-      }));
+      localStorage.setItem(
+        'test-nonleader-key',
+        JSON.stringify({
+          tabId: 'tab-leader-3',
+          timestamp: Date.now(),
+          leaseMs: 5000,
+        })
+      );
 
       // leader2 is not the leader
       expect(leader2.isLeader()).toBe(false);
@@ -1020,10 +1048,10 @@ describe('LeaderElector', () => {
         createLeaderEvent('acquire', { tabId: 'tab-1' }),
         createLeaderEvent('lose', { tabId: 'tab-1' }),
       ];
-      
+
       const event = createLeaderEvent('change', { tabId: 'tab-1', newLeader: 'tab-2' });
       emitLeaderEvent(event, state, eventQueue);
-      
+
       expect(consoleErrorSpy).toHaveBeenCalledWith('Event buffer overflow');
       expect(eventQueue.length).toBe(2); // No new event added
     });
@@ -1050,10 +1078,10 @@ describe('LeaderElector', () => {
         createLeaderEvent('acquire', { tabId: 'tab-1' }),
         createLeaderEvent('lose', { tabId: 'tab-1' }),
       ];
-      
+
       const event = createLeaderEvent('change', { tabId: 'tab-1', newLeader: 'tab-2' });
       emitLeaderEvent(event, state, eventQueue);
-      
+
       expect(eventQueue.length).toBe(2); // Newest event dropped
     });
 
@@ -1076,20 +1104,23 @@ describe('LeaderElector', () => {
         bufferOverflow: 'oldest',
       };
       const eventQueue: LeaderEvent[] = [];
-      
+
       // Set up localStorage with valid lease for this tab
-      localStorage.setItem('test-key', JSON.stringify({
-        tabId: 'tab-1',
-        timestamp: Date.now(),
-        leaseMs: 5000,
-      }));
-      
+      localStorage.setItem(
+        'test-key',
+        JSON.stringify({
+          tabId: 'tab-1',
+          timestamp: Date.now(),
+          leaseMs: 5000,
+        })
+      );
+
       const result = tryAcquireLeadership(state, eventQueue);
-      
+
       expect(result).toBe(true);
       expect(state.isLeader).toBe(true);
       expect(eventQueue.length).toBe(0); // No event emitted since already leader
-      
+
       localStorage.removeItem('test-key');
     });
   });

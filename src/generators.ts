@@ -1,4 +1,11 @@
-import type { TabBusMessage, InternalBusState, LeaderEvent, InternalLeaderState, MessageQueue, EventQueue } from './types.js';
+import type {
+  TabBusMessage,
+  InternalBusState,
+  LeaderEvent,
+  InternalLeaderState,
+  MessageQueue,
+  EventQueue,
+} from './types.js';
 import { waitForItems } from './utils.js';
 
 /**
@@ -8,9 +15,9 @@ import { waitForItems } from './utils.js';
  * @param signal - Optional AbortSignal for cancellation
  * @yields TabBus messages
  */
-export async function* busMessagesGenerator<T = any>(
+export async function* busMessagesGenerator<T = unknown>(
   state: InternalBusState<T>,
-  queue: MessageQueue,
+  queue: MessageQueue<T>,
   signal?: AbortSignal
 ): AsyncGenerator<TabBusMessage<T>> {
   state.activeIterators++;

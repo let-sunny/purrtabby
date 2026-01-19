@@ -74,16 +74,19 @@ src/
 ### Module Responsibilities
 
 #### `index.ts`
+
 - Exports public API: `createBus()`, `createLeaderElector()`
 - Re-exports types for TypeScript users
 
 #### `bus.ts`
+
 - `createBus()`: Factory function to create TabBus instance
 - `handleBusMessage()`: Pure function to process incoming messages
 - `handleBusMessageEvent()`: Pure function to handle BroadcastChannel events
 - TabBus implementation with publish/subscribe/stream APIs
 
 #### `leader.ts`
+
 - `createLeaderElector()`: Factory function to create LeaderElector instance
 - `tryAcquireLeadership()`: Pure function to attempt leadership acquisition
 - `sendLeaderHeartbeat()`: Pure function to send heartbeat
@@ -92,10 +95,12 @@ src/
 - LeaderElector implementation with start/stop/stream APIs
 
 #### `generators.ts`
+
 - `busMessagesGenerator()`: Async generator for TabBus messages
 - `leaderEventsGenerator()`: Async generator for Leader events
 
 #### `utils.ts`
+
 - `generateTabId()`: Generate unique tab identifier
 - `createTabBusEvent()`: Create TabBus event object
 - `createLeaderEvent()`: Create Leader event object
@@ -105,6 +110,7 @@ src/
 - `isValidLeaderLease()`: Validate leader lease
 
 #### `types.ts`
+
 - TypeScript interfaces and types for all public and internal APIs
 
 ---
@@ -141,14 +147,18 @@ handleBusMessage() (pure function)
 ### Key Functions
 
 #### `handleBusMessage()`
+
 Pure function that processes a message:
+
 - Notifies type-specific callbacks
 - Notifies all-message callbacks
 - Adds message to queue for stream generators
 - Resolves waiting generators
 
 #### `handleBusMessageEvent()`
+
 Pure function that handles BroadcastChannel message events:
+
 - Parses message from event
 - Calls `handleBusMessage()` with error handling
 - Emits error events on parsing failure
@@ -174,6 +184,7 @@ By default, `BroadcastChannel` does not deliver messages to the sending tab. To 
 **What is a Lease?**
 
 A **lease** is a time-limited "contract" that grants a tab the right to be the leader. Think of it like renting an apartment:
+
 - The lease has an expiration time
 - The leader must renew the lease periodically (via heartbeat) to maintain leadership
 - If the lease expires, any tab can acquire leadership
@@ -181,13 +192,14 @@ A **lease** is a time-limited "contract" that grants a tab the right to be the l
 
 ```typescript
 interface LeaderLease {
-  tabId: string;      // ID of the leader tab
-  timestamp: number;   // When the lease was created/updated
-  leaseMs: number;     // Lease duration in milliseconds
+  tabId: string; // ID of the leader tab
+  timestamp: number; // When the lease was created/updated
+  leaseMs: number; // Lease duration in milliseconds
 }
 ```
 
 The lease is stored in `localStorage` and contains:
+
 - **tabId**: Which tab is currently the leader
 - **timestamp**: When the lease was last updated (used to calculate expiration)
 - **leaseMs**: How long the lease is valid (default: 5000ms = 5 seconds)
@@ -239,7 +251,7 @@ Non-leader tabs periodically check for leadership changes:
 // Every checkInterval milliseconds
 checkLeaderLeadership() {
   const currentLease = readLeaderLease()
-  
+
   if (currentLease is valid && currentLease.tabId === this.tabId) {
     // We are the leader
     if (!wasLeader) {
@@ -258,19 +270,25 @@ checkLeaderLeadership() {
 ### Key Functions
 
 #### `tryAcquireLeadership()`
+
 Pure function that attempts to acquire leadership:
+
 - Reads current lease from localStorage
 - If no lease or expired, writes new lease
 - Returns true if leadership was acquired
 
 #### `sendLeaderHeartbeat()`
+
 Pure function that sends heartbeat:
+
 - Checks if still leader
 - Updates lease timestamp if valid
 - Emits 'lose' event if leadership lost
 
 #### `checkLeaderLeadership()`
+
 Pure function that checks leadership status:
+
 - Reads current lease
 - Compares with own tabId
 - Emits appropriate events ('acquire', 'lose', 'change')
@@ -290,7 +308,7 @@ async function* busMessagesGenerator(state, queue, signal?) {
       while (queue.messages.length > 0) {
         yield queue.messages.shift()!;
       }
-      
+
       // Wait for new messages
       await waitForItems(signal, ...);
     }
@@ -311,6 +329,7 @@ Similar structure for leader events, but uses event queue instead of message que
 ### Wait Mechanism
 
 `waitForItems()` uses an event-based notification system:
+
 - Adds resolver to a Set when waiting
 - Resolves when items arrive (via `forEach(resolve)`)
 - Cleans up resolver on abort or when items arrive
@@ -319,6 +338,7 @@ Similar structure for leader events, but uses event queue instead of message que
 ### Multiple Iterators
 
 Multiple iterators can consume from the same stream:
+
 - Each iterator increments `activeIterators`
 - Messages/events are consumed by the first iterator that reads them
 - Queue is cleared only when the last iterator exits
@@ -449,6 +469,7 @@ Emit 'change' event (if different leader)
 purrtabby is designed with simplicity and lightweight in mind. The functional programming approach with pure functions makes the code easy to test and maintain. The generator-based streams provide a modern API for consuming messages and events, while the lease-based leader election ensures reliable coordination across tabs.
 
 Key strengths:
+
 - **Lightweight**: Minimal bundle size
 - **Testable**: Pure functions enable comprehensive testing
 - **Modern**: Uses async iterables and TypeScript
@@ -464,6 +485,7 @@ This section provides a step-by-step explanation of how leader election works in
 ### Overview
 
 Leader election uses a **lease-based mechanism** stored in `localStorage`. The lease contains:
+
 - `tabId`: Identifier of the current leader tab
 - `timestamp`: When the lease was last updated
 - `leaseMs`: Duration the lease is valid (default: 5000ms)
@@ -475,17 +497,19 @@ When `leader.start()` is called, the following process occurs:
 #### Step 1: Initial Acquisition Attempt
 
 ```typescript
-tryAcquireLeadership(state, eventQueue)
+tryAcquireLeadership(state, eventQueue);
 ```
 
 1. **Read current lease** from localStorage:
+
    ```typescript
    const currentLease = readLeaderLease(state.key);
    ```
 
 2. **Check if lease is valid**:
+
    ```typescript
-   isValidLeaderLease(currentLease)
+   isValidLeaderLease(currentLease);
    // Returns false if:
    // - lease is null/undefined
    // - lease.timestamp + lease.leaseMs < Date.now() (expired)
@@ -534,11 +558,13 @@ setInterval(() => {
 **Heartbeat Process** (`sendLeaderHeartbeat`):
 
 1. **Check preconditions**:
+
    ```typescript
    if (state.stopped || !state.isLeader) return;
    ```
 
 2. **Read current lease**:
+
    ```typescript
    const currentLease = readLeaderLease(state.key);
    ```
@@ -568,34 +594,36 @@ Non-leader tabs periodically check for leadership opportunities:
 #### Check Timer
 
 ```typescript
-setInterval(() => {
-  checkLeaderLeadership(state, eventQueue);
-}, heartbeatMs / 2 + jitter);
+setInterval(
+  () => {
+    checkLeaderLeadership(state, eventQueue);
+  },
+  heartbeatMs / 2 + jitter
+);
 ```
 
 **Check Process** (`checkLeaderLeadership`):
 
 1. **Read current lease**:
+
    ```typescript
    const currentLease = readLeaderLease(state.key);
    ```
 
 2. **Determine current state**:
+
    ```typescript
    const wasLeader = state.isLeader;
-   const isNowLeader = currentLease?.tabId === state.tabId 
-                     && isValidLeaderLease(currentLease);
+   const isNowLeader = currentLease?.tabId === state.tabId && isValidLeaderLease(currentLease);
    ```
 
 3. **Handle state transitions**:
    - **Became leader** (`!wasLeader && isNowLeader`):
      - Set `state.isLeader = true`
      - Emit `'acquire'` event
-   
    - **Lost leadership** (`wasLeader && !isNowLeader`):
      - Set `state.isLeader = false`
      - Emit `'lose'` event with `newLeader` metadata
-   
    - **Leadership changed** (`wasLeader && isNowLeader && currentLease.tabId !== state.tabId`):
      - This case is logically impossible (if `isNowLeader`, then `currentLease.tabId === state.tabId`)
      - Emit `'change'` event (edge case handling)
@@ -605,6 +633,7 @@ setInterval(() => {
 **Problem**: Multiple tabs might try to acquire leadership simultaneously.
 
 **Solution**: Double-check pattern:
+
 1. Write lease to localStorage
 2. Immediately read it back
 3. Only consider leadership acquired if read value matches our tabId
@@ -614,11 +643,13 @@ This ensures only one tab succeeds even in race conditions.
 ### Lease Expiration
 
 A lease expires when:
+
 ```typescript
-lease.timestamp + lease.leaseMs < Date.now()
+lease.timestamp + lease.leaseMs < Date.now();
 ```
 
 **Expired lease handling**:
+
 - Any tab can acquire leadership when lease expires
 - Leader must renew before expiration (via heartbeat)
 - If leader tab crashes/closes, lease expires and another tab can take over

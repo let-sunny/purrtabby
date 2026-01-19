@@ -1,15 +1,15 @@
 /**
  * type-safety.test.ts
- * 
+ *
  * Purpose: Type safety tests for TypeScript type checking
- * 
+ *
  * Test Coverage:
  * - Generic type enforcement for TabBus message payloads
  * - LeaderElector options type checking
  * - Event type inference
  * - Stream type inference
  * - Options type validation
- * 
+ *
  * Note: These tests primarily verify compile-time type safety.
  * Some tests use @ts-expect-error to verify that invalid types are rejected.
  */
@@ -26,13 +26,13 @@ describe('Type Safety', () => {
       }
 
       const bus = createBus<UserAction>({ channel: 'test-channel' });
-      
+
       // TypeScript should enforce UserAction type
       bus.publish('click', { action: 'click', target: 'button' });
-      
+
       // Note: TypeScript will reject invalid payloads at compile time
       // Example: bus.publish('click', { invalid: 'data' }); // Type error
-      
+
       bus.close();
     });
 
@@ -43,7 +43,7 @@ describe('Type Safety', () => {
       }
 
       const bus = createBus<UserAction>({ channel: 'test-channel' });
-      
+
       bus.subscribe('click', (message) => {
         // TypeScript should infer message.payload as UserAction | undefined
         if (message.payload) {
@@ -51,7 +51,7 @@ describe('Type Safety', () => {
           expect(typeof message.payload.target).toBe('string');
         }
       });
-      
+
       bus.close();
     });
 
@@ -62,14 +62,14 @@ describe('Type Safety', () => {
       }
 
       const bus = createBus<UserAction>({ channel: 'test-channel' });
-      
+
       bus.subscribeAll((message) => {
         // TypeScript should infer message.payload as UserAction | undefined
         if (message.payload) {
           expect(typeof message.payload.action).toBe('string');
         }
       });
-      
+
       bus.close();
     });
 
@@ -80,15 +80,15 @@ describe('Type Safety', () => {
       }
 
       const bus = createBus<UserAction>({ channel: 'test-channel' });
-      
+
       // TypeScript should infer correct type in stream
       // This is a compile-time type check, not a runtime test
       const stream = bus.stream();
       expect(stream).toBeDefined();
-      
+
       // The type system ensures message.payload is UserAction | undefined
       // We can't easily test this at runtime, but TypeScript will catch type errors
-      
+
       bus.close();
     });
 
@@ -186,7 +186,7 @@ describe('Type Safety', () => {
       // This is a compile-time type check, not a runtime test
       const stream = leader.stream();
       expect(stream).toBeDefined();
-      
+
       // The type system ensures event is LeaderEvent
       // We can't easily test this at runtime, but TypeScript will catch type errors
 
@@ -220,12 +220,12 @@ describe('Type Safety', () => {
       // The actual generator is tested in generators.test.ts
       const bus = createBus<TestPayload>({ channel: 'test-channel' });
       const stream = bus.stream();
-      
+
       expect(stream).toBeDefined();
-      
+
       // TypeScript should infer the correct type for messages in the stream
       // This is verified at compile time
-      
+
       bus.close();
     });
 
@@ -236,13 +236,13 @@ describe('Type Safety', () => {
         key: 'test-leader',
         tabId: 'tab-1',
       });
-      
+
       const stream = leader.stream();
       expect(stream).toBeDefined();
-      
+
       // TypeScript should infer LeaderEvent type for events in the stream
       // This is verified at compile time
-      
+
       leader.stop();
     });
   });

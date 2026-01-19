@@ -5,11 +5,13 @@ purrtabby can be used with WebSocket to share a single connection across multipl
 ## Why Use This Pattern?
 
 When multiple tabs are open, creating a WebSocket connection for each tab leads to:
+
 - Increased server load
 - Unnecessary network resource usage
 - Receiving the same messages multiple times
 
 With purrtabby:
+
 - Only the leader tab maintains the WebSocket connection
 - Other tabs communicate through the leader
 - Reduced server load and efficient resource usage
@@ -32,7 +34,7 @@ leader.start();
 // Create WebSocket connection when becoming leader
 leader.on('acquire', () => {
   console.log('Became leader. Starting WebSocket connection.');
-  
+
   socket = createSocket({
     url: 'wss://api.example.com/ws',
   });
@@ -66,7 +68,7 @@ leader.on('lose', () => {
 bus.subscribe('server-message', (message) => {
   const data = message.payload;
   console.log('Received message from server:', data);
-  
+
   // Common logic like UI updates
   updateUI(data);
 });
@@ -98,7 +100,7 @@ import { createBus, createLeaderElector } from 'purrtabby';
 
 // ========== Initialization ==========
 const bus = createBus({ channel: 'chat-app' });
-const leader = createLeaderElector({ 
+const leader = createLeaderElector({
   key: 'chat-leader',
   tabId: `tab-${Date.now()}`,
 });
@@ -110,7 +112,7 @@ leader.start();
 
 leader.on('acquire', () => {
   console.log('✅ Became leader. Starting WebSocket connection');
-  
+
   socket = createSocket({
     url: 'wss://chat.example.com/ws',
   });
@@ -122,9 +124,9 @@ leader.on('acquire', () => {
 
   socket.onOpen(() => {
     console.log('WebSocket connected');
-    bus.publish('server-message', { 
-      type: 'system', 
-      message: 'WebSocket connected' 
+    bus.publish('server-message', {
+      type: 'system',
+      message: 'WebSocket connected',
     });
   });
 
@@ -135,9 +137,9 @@ leader.on('acquire', () => {
 
   socket.onError((error) => {
     console.error('WebSocket error:', error);
-    bus.publish('server-message', { 
-      type: 'error', 
-      message: 'WebSocket connection error' 
+    bus.publish('server-message', {
+      type: 'error',
+      message: 'WebSocket connection error',
     });
   });
 });
@@ -153,7 +155,7 @@ leader.on('lose', () => {
 // ========== Receive Server Messages (All Tabs) ==========
 function handleServerMessage(message: any) {
   console.log('📨 Server message:', message);
-  
+
   switch (message.type) {
     case 'chat':
       displayChatMessage(message);
@@ -190,7 +192,7 @@ bus.subscribe('to-server', (message) => {
 document.getElementById('send-btn')?.addEventListener('click', () => {
   const input = document.getElementById('message-input') as HTMLInputElement;
   const text = input.value;
-  
+
   if (text) {
     sendToServer({
       type: 'chat',
@@ -223,18 +225,21 @@ const bus = createBus({ channel: 'app' });
 const leader = createLeaderElector({ key: 'app-leader' });
 
 let socket: ReturnType<typeof createSocket> | null = null;
-const pendingRequests = new Map<string, {
-  resolve: (value: any) => void;
-  reject: (error: Error) => void;
-  timeout: ReturnType<typeof setTimeout>;
-}>();
+const pendingRequests = new Map<
+  string,
+  {
+    resolve: (value: any) => void;
+    reject: (error: Error) => void;
+    timeout: ReturnType<typeof setTimeout>;
+  }
+>();
 
 leader.start();
 
 // When becoming leader, connect WebSocket and register query handler
 leader.on('acquire', () => {
   socket = createSocket({ url: 'wss://api.example.com/ws' });
-  
+
   socket.onMessage((message) => {
     bus.publish('server-message', message);
   });
@@ -243,7 +248,7 @@ leader.on('acquire', () => {
   bus.subscribe('query-request', (msg) => {
     const { requestId, query } = msg.payload || {};
     if (!socket || !requestId) return;
-    
+
     // Request via WebSocket
     socket.send({
       type: 'query',
@@ -257,13 +262,13 @@ leader.on('acquire', () => {
 bus.subscribe('server-message', (msg) => {
   const { requestId, result, error } = msg.payload || {};
   if (!requestId) return;
-  
+
   const pending = pendingRequests.get(requestId);
   if (!pending) return;
-  
+
   pendingRequests.delete(requestId);
   clearTimeout(pending.timeout);
-  
+
   if (error) {
     pending.reject(new Error(error));
   } else {
@@ -275,14 +280,14 @@ bus.subscribe('server-message', (msg) => {
 function queryServer(query: string, timeout = 5000): Promise<any> {
   return new Promise((resolve, reject) => {
     const requestId = `req-${Date.now()}-${Math.random()}`;
-    
+
     const timeoutId = setTimeout(() => {
       pendingRequests.delete(requestId);
       reject(new Error('Query timeout'));
     }, timeout);
-    
+
     pendingRequests.set(requestId, { resolve, reject, timeout: timeoutId });
-    
+
     bus.publish('query-request', { requestId, query });
   });
 }
@@ -311,16 +316,19 @@ try {
 ## Real-World Use Cases
 
 ### Chat Application
+
 - Only leader tab maintains WebSocket connection
 - All tabs can receive and send chat messages
 - When one tab closes, another tab becomes leader and maintains connection
 
 ### Real-time Dashboard
+
 - Only leader tab connects to server via WebSocket
 - All tabs receive real-time data
 - Minimizes server load
 
 ### Collaboration Tool
+
 - Leader tab synchronizes with server
 - Other tabs communicate with server through leader
 - Efficient even with multiple users working simultaneously

@@ -17,13 +17,13 @@ class MockBroadcastChannel {
     MockBroadcastChannel.channels.get(name)!.add(this);
   }
 
-  postMessage(message: any): void {
+  postMessage(message: unknown): void {
     const channelSet = MockBroadcastChannel.channels.get(this.name);
     if (!channelSet) return;
 
     // Synchronously call onmessage for other channels (simulates BroadcastChannel behavior)
     // Use a small delay via Promise.resolve() to ensure subscription handlers are set up
-    const channelsToNotify = Array.from(channelSet).filter(ch => ch !== this && ch.onmessage);
+    const channelsToNotify = Array.from(channelSet).filter((ch) => ch !== this && ch.onmessage);
     if (channelsToNotify.length > 0) {
       Promise.resolve().then(() => {
         channelsToNotify.forEach((channel) => {
@@ -49,7 +49,9 @@ class MockBroadcastChannel {
 
 export function setupBroadcastChannelMock(): void {
   if (typeof globalThis.BroadcastChannel === 'undefined') {
-    (globalThis as any).BroadcastChannel = MockBroadcastChannel;
+    (
+      globalThis as typeof globalThis & { BroadcastChannel: typeof MockBroadcastChannel }
+    ).BroadcastChannel = MockBroadcastChannel;
   }
 }
 

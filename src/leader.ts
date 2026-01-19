@@ -1,6 +1,22 @@
-import type { LeaderElector, LeaderElectorOptions, InternalLeaderState, LeaderEvent, LeaderEventType } from './types.js';
+import type {
+  LeaderElector,
+  LeaderElectorOptions,
+  InternalLeaderState,
+  LeaderEvent,
+  LeaderEventType,
+} from './types.js';
 import { leaderEventsGenerator } from './generators.js';
-import { createLeaderEvent, addJitter, readLeaderLease, writeLeaderLease, removeLeaderLease, isValidLeaderLease, handleBufferOverflow, executeCallbacks, type LeaderLease } from './utils.js';
+import {
+  createLeaderEvent,
+  addJitter,
+  readLeaderLease,
+  writeLeaderLease,
+  removeLeaderLease,
+  isValidLeaderLease,
+  handleBufferOverflow,
+  executeCallbacks,
+  type LeaderLease,
+} from './utils.js';
 
 /**
  * Emit an event to all callbacks (pure function, testable)
@@ -62,7 +78,7 @@ export function tryAcquireLeadership(
   if (state.stopped) return false;
 
   const currentLease = readLeaderLease(state.key);
-  
+
   // If no lease or expired, try to acquire
   if (!isValidLeaderLease(currentLease)) {
     const newLease: LeaderLease = {
@@ -71,7 +87,7 @@ export function tryAcquireLeadership(
       leaseMs: state.leaseMs,
     };
     writeLeaderLease(state.key, newLease);
-    
+
     // Double-check: read back to see if we got it
     const acquiredLease = readLeaderLease(state.key);
     if (acquiredLease?.tabId === state.tabId) {
@@ -95,10 +111,14 @@ export function tryAcquireLeadership(
   // Lost leadership
   if (state.isLeader) {
     state.isLeader = false;
-      emitLeaderEvent(createLeaderEvent('lose', { 
+    emitLeaderEvent(
+      createLeaderEvent('lose', {
         tabId: state.tabId,
         newLeader: currentLease?.tabId,
-      }), state, eventQueue);
+      }),
+      state,
+      eventQueue
+    );
   }
 
   return false;
@@ -109,10 +129,7 @@ export function tryAcquireLeadership(
  * @param state - Internal leader state
  * @param eventQueue - Event queue for streaming
  */
-export function sendLeaderHeartbeat(
-  state: InternalLeaderState,
-  eventQueue: LeaderEvent[]
-): void {
+export function sendLeaderHeartbeat(state: InternalLeaderState, eventQueue: LeaderEvent[]): void {
   if (state.stopped || !state.isLeader) return;
 
   const currentLease = readLeaderLease(state.key);
@@ -136,10 +153,7 @@ export function sendLeaderHeartbeat(
  * @param state - Internal leader state
  * @param eventQueue - Event queue for streaming
  */
-export function checkLeaderLeadership(
-  state: InternalLeaderState,
-  eventQueue: LeaderEvent[]
-): void {
+export function checkLeaderLeadership(state: InternalLeaderState, eventQueue: LeaderEvent[]): void {
   if (state.stopped) return;
 
   const currentLease = readLeaderLease(state.key);
@@ -151,16 +165,24 @@ export function checkLeaderLeadership(
     emitLeaderEvent(createLeaderEvent('acquire', { tabId: state.tabId }), state, eventQueue);
   } else if (wasLeader && !isNowLeader) {
     state.isLeader = false;
-      emitLeaderEvent(createLeaderEvent('lose', { 
+    emitLeaderEvent(
+      createLeaderEvent('lose', {
         tabId: state.tabId,
         newLeader: currentLease?.tabId,
-      }), state, eventQueue);
+      }),
+      state,
+      eventQueue
+    );
   } else if (wasLeader && isNowLeader && currentLease?.tabId !== state.tabId) {
     // Leadership changed to another tab
-    emitLeaderEvent(createLeaderEvent('change', {
-      tabId: state.tabId,
-      newLeader: currentLease.tabId,
-    }), state, eventQueue);
+    emitLeaderEvent(
+      createLeaderEvent('change', {
+        tabId: state.tabId,
+        newLeader: currentLease.tabId,
+      }),
+      state,
+      eventQueue
+    );
   }
 }
 
@@ -170,14 +192,7 @@ export function checkLeaderLeadership(
  * @returns LeaderElector instance
  */
 export function createLeaderElector(options: LeaderElectorOptions): LeaderElector {
-  const {
-    key,
-    tabId,
-    leaseMs = 5000,
-    heartbeatMs = 2000,
-    jitterMs = 500,
-    buffer,
-  } = options;
+  const { key, tabId, leaseMs = 5000, heartbeatMs = 2000, jitterMs = 500, buffer } = options;
   const bufferSize = buffer?.size ?? 100;
   const bufferOverflow = buffer?.overflow ?? 'oldest';
 
@@ -205,7 +220,6 @@ export function createLeaderElector(options: LeaderElectorOptions): LeaderElecto
 
   // Event queue for stream generators
   const eventQueue: LeaderEvent[] = [];
-
 
   if (typeof window !== 'undefined') {
     // Listen to storage events for cross-tab communication
@@ -248,14 +262,14 @@ export function createLeaderElector(options: LeaderElectorOptions): LeaderElecto
         const heartbeatInterval = addJitter(state.heartbeatMs, state.jitterMs);
         state.heartbeatTimer = setInterval(() => {
           sendLeaderHeartbeat(state, eventQueue);
-        }, heartbeatInterval) as any;
+        }, heartbeatInterval) as ReturnType<typeof setInterval>;
       }
 
       // Start checking for leadership changes
       const checkInterval = addJitter(state.heartbeatMs / 2, state.jitterMs);
       state.checkTimer = setInterval(() => {
         checkLeaderLeadership(state, eventQueue);
-      }, checkInterval) as any;
+      }, checkInterval) as ReturnType<typeof setInterval>;
     },
 
     stop(): void {
@@ -278,7 +292,11 @@ export function createLeaderElector(options: LeaderElectorOptions): LeaderElecto
           removeLeaderLease(state.key);
         }
         state.isLeader = false;
-        emitLeaderEvent(createLeaderEvent('lose', { tabId: state.tabId, reason: 'stopped' }), state, eventQueue);
+        emitLeaderEvent(
+          createLeaderEvent('lose', { tabId: state.tabId, reason: 'stopped' }),
+          state,
+          eventQueue
+        );
       }
 
       // Remove storage event listener

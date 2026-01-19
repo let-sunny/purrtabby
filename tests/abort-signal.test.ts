@@ -1,13 +1,13 @@
 /**
  * abort-signal.test.ts
- * 
+ *
  * Purpose: Integration tests for async operation cancellation using AbortSignal
- * 
+ *
  * Test Coverage:
  * - AbortSignal handling in bus.stream() (at start, during consumption, while waiting)
  * - AbortSignal handling in leader.stream() (at start, during consumption)
  * - Cleanup and memory leak prevention (signal listener removal)
- * 
+ *
  * Boundaries:
  * - Basic generator behavior is tested in generators.test.ts
  * - General cases without AbortSignal are tested in other files
@@ -16,6 +16,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createBus, createLeaderElector } from '../src/index.js';
 import { setupBroadcastChannelMock, cleanupBroadcastChannelMock } from './helpers.js';
+import type { TabBusMessage, LeaderEvent } from '../src/types.js';
 
 describe('AbortSignal Integration', () => {
   beforeEach(() => {
@@ -42,7 +43,7 @@ describe('AbortSignal Integration', () => {
       const controller = new AbortController();
       controller.abort();
 
-      const messages: any[] = [];
+      const messages: TabBusMessage[] = [];
       const messagePromise = (async () => {
         for await (const msg of bus.stream({ signal: controller.signal })) {
           messages.push(msg);
@@ -62,7 +63,7 @@ describe('AbortSignal Integration', () => {
       await vi.runAllTimersAsync();
 
       const controller = new AbortController();
-      const messages: any[] = [];
+      const messages: TabBusMessage[] = [];
 
       const messagePromise = (async () => {
         for await (const msg of bus2.stream({ signal: controller.signal })) {
@@ -96,7 +97,7 @@ describe('AbortSignal Integration', () => {
       await vi.runAllTimersAsync();
 
       const controller = new AbortController();
-      const messages: any[] = [];
+      const messages: TabBusMessage[] = [];
 
       const messagePromise = (async () => {
         for await (const msg of bus2.stream({ signal: controller.signal })) {
@@ -128,7 +129,7 @@ describe('AbortSignal Integration', () => {
       let messageCount = 0;
 
       const messagePromise = (async () => {
-        for await (const msg of bus2.stream({ signal: controller.signal })) {
+        for await (const _msg of bus2.stream({ signal: controller.signal })) {
           messageCount++;
           if (messageCount >= 1) {
             controller.abort();
@@ -148,7 +149,7 @@ describe('AbortSignal Integration', () => {
 
       // Create new stream to verify no memory leaks
       const controller2 = new AbortController();
-      const messages2: any[] = [];
+      const messages2: TabBusMessage[] = [];
       const messagePromise2 = (async () => {
         for await (const msg of bus2.stream({ signal: controller2.signal })) {
           messages2.push(msg);
@@ -180,7 +181,7 @@ describe('AbortSignal Integration', () => {
       const controller = new AbortController();
       controller.abort();
 
-      const events: any[] = [];
+      const events: LeaderEvent[] = [];
       const eventPromise = (async () => {
         for await (const event of leader.stream({ signal: controller.signal })) {
           events.push(event);
@@ -194,7 +195,6 @@ describe('AbortSignal Integration', () => {
       leader.stop();
     });
 
-
     it('should abort while waiting for new events', async () => {
       const leader = createLeaderElector({
         key: 'test-leader',
@@ -205,7 +205,7 @@ describe('AbortSignal Integration', () => {
       await vi.runAllTimersAsync();
 
       const controller = new AbortController();
-      const events: any[] = [];
+      const events: LeaderEvent[] = [];
 
       const eventPromise = (async () => {
         for await (const event of leader.stream({ signal: controller.signal })) {
@@ -223,6 +223,5 @@ describe('AbortSignal Integration', () => {
       expect(events.length).toBe(0);
       leader.stop();
     });
-
   });
 });

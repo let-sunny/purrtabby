@@ -1,8 +1,8 @@
 /**
  * generators.test.ts
- * 
+ *
  * Purpose: Tests for async generator functions (busMessagesGenerator and leaderEventsGenerator)
- * 
+ *
  * Test Coverage:
  * - busMessagesGenerator basic message streaming
  * - busMessagesGenerator queue management (multiple messages, queue clearing)
@@ -10,7 +10,7 @@
  * - leaderEventsGenerator queue management
  * - Iterator lifecycle (activeIterators counter, queue clearing on last iterator)
  * - waitForItems basic paths: hasItems check, polling
- * 
+ *
  * Boundaries:
  * - Generator functions are used internally by bus.ts and leader.ts
  * - These tests verify the generator logic in isolation
@@ -20,7 +20,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { busMessagesGenerator, leaderEventsGenerator } from '../src/generators.js';
 import { createLeaderEvent } from '../src/utils.js';
-import type { InternalBusState, InternalLeaderState, TabBusMessage, LeaderEvent } from '../src/types.js';
+import type {
+  InternalBusState,
+  InternalLeaderState,
+  TabBusMessage,
+  LeaderEvent,
+} from '../src/types.js';
 
 describe('busMessagesGenerator', () => {
   let state: InternalBusState;
@@ -67,10 +72,9 @@ describe('busMessagesGenerator', () => {
     expect(state.activeIterators).toBe(1);
   });
 
-
   it('should wait for new messages when queue is empty', async () => {
     vi.useRealTimers();
-    
+
     const generator = busMessagesGenerator(state, queue);
     let resolved = false;
 
@@ -80,30 +84,29 @@ describe('busMessagesGenerator', () => {
     });
 
     // Wait a bit to ensure it's waiting
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(resolved).toBe(false);
 
     // Add message to queue and trigger resolver
     const message: TabBusMessage = { type: 'test', tabId: 'tab1', ts: Date.now() };
     queue.messages.push(message);
-    state.messageResolvers.forEach(resolve => resolve());
+    state.messageResolvers.forEach((resolve) => resolve());
     state.messageResolvers.clear();
 
     // Wait for message to be consumed
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     // Should have consumed the message
     await consumePromise;
     expect(resolved).toBe(true);
-    
+
     vi.useFakeTimers();
   });
 
-
   it('should resolve immediately if items exist in waitForItems (line 46-48)', async () => {
     vi.useRealTimers();
-    
+
     const queue: { messages: TabBusMessage[] } = {
       messages: [{ type: 'test', tabId: 'tab1', ts: Date.now() }],
     };
@@ -118,20 +121,20 @@ describe('busMessagesGenerator', () => {
     };
 
     const generator = busMessagesGenerator(state, queue);
-    
+
     // Should resolve immediately (line 45-48)
     // waitForItems will check hasItems() first (line 45)
     // Since queue has items, it will call doResolve() and return (line 46-48)
     const result = await generator.next();
     expect(result.done).toBe(false);
     expect(result.value).toBeDefined();
-    
+
     vi.useFakeTimers();
   });
 
   it('should use polling when no AbortSignal provided (line 52-58)', async () => {
     vi.useRealTimers();
-    
+
     const queue: { messages: TabBusMessage[] } = { messages: [] };
     const state: InternalBusState = {
       channel: null,
@@ -153,41 +156,40 @@ describe('busMessagesGenerator', () => {
     });
 
     // Wait a bit to ensure generator is waiting
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     expect(resolved).toBe(false);
 
     // Add message and trigger resolver
     const message = { type: 'test', tabId: 'tab1', ts: Date.now() };
     queue.messages.push(message);
-    
+
     // Trigger resolver to wake up the generator
-    state.messageResolvers.forEach(resolve => resolve());
+    state.messageResolvers.forEach((resolve) => resolve());
     state.messageResolvers.clear();
 
     // Wait for message to be consumed
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     const result = await consumePromise;
     expect(resolved).toBe(true);
     expect(result.done).toBe(false);
     expect(result.value).toEqual(message);
-    
+
     vi.useFakeTimers();
   });
-
 
   it('should clear queue when last iterator ends', async () => {
     const message: TabBusMessage = { type: 'test', tabId: 'tab1', ts: Date.now() };
     queue.messages = [message];
 
     const generator = busMessagesGenerator(state, queue);
-    
+
     // Consume message
     await generator.next();
-    
+
     // Add more messages
     queue.messages.push({ type: 'test2', tabId: 'tab1', ts: Date.now() });
-    
+
     // End iterator
     await generator.return(undefined);
 
@@ -281,28 +283,27 @@ describe('leaderEventsGenerator', () => {
     expect(state.activeIterators).toBe(1);
   });
 
-
   it('should wait for new events when queue is empty', async () => {
     vi.useRealTimers();
-    
+
     const generator = leaderEventsGenerator(state, queue);
     let resolved = false;
 
-    const consumePromise = generator.next().then(() => {
+    const _consumePromise = generator.next().then(() => {
       resolved = true;
     });
 
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     expect(resolved).toBe(false);
 
     const event = createLeaderEvent('acquire', { tabId: 'tab1' });
     queue.events.push(event);
-    state.eventResolvers.forEach(resolve => resolve());
+    state.eventResolvers.forEach((resolve) => resolve());
     state.eventResolvers.clear();
 
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     expect(resolved).toBe(true);
-    
+
     vi.useFakeTimers();
   });
 
@@ -312,7 +313,7 @@ describe('leaderEventsGenerator', () => {
 
     const generator = leaderEventsGenerator(state, queue);
     await generator.next();
-    
+
     queue.events.push(createLeaderEvent('lose', { tabId: 'tab1' }));
     await generator.return(undefined);
 
@@ -346,5 +347,4 @@ describe('leaderEventsGenerator', () => {
     expect(state.activeIterators).toBe(0);
     expect(queue.events).toHaveLength(0);
   });
-
 });
