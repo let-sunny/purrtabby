@@ -19,6 +19,7 @@ import { createBus } from '../src/index.js';
 import { handleBusMessage, handleBusMessageEvent } from '../src/bus.js';
 import { setupBroadcastChannelMock, cleanupBroadcastChannelMock } from './helpers.js';
 import type { InternalBusState, TabBusMessage } from '../src/types.js';
+import * as utils from '../src/utils.js';
 
 describe('TabBus', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
@@ -568,8 +569,9 @@ describe('TabBus', () => {
       bus2.close();
     });
 
-    it('should handle onmessageerror (line 104-108)', () => {
-      const bus = createBus({ channel: 'test-channel' });
+    it('should handle onmessageerror (line 119-124)', () => {
+      const createTabBusEventSpy = vi.spyOn(utils, 'createTabBusEvent');
+      const bus = createBus({ channel: 'test-channel-onerror' });
 
       const bc = (
         globalThis as typeof globalThis & {
@@ -577,21 +579,35 @@ describe('TabBus', () => {
         }
       ).BroadcastChannel;
       const channels = bc.channels || new Map();
-      const channelSet = Array.from(channels.get('test-channel') || new Set());
+      const channelSet = Array.from(channels.get('test-channel-onerror') || new Set());
 
-      const busChannel = channelSet.find((ch) => ch.onmessageerror);
+      // Find any channel in the set (all channels should have onmessageerror set)
+      const busChannel = channelSet.length > 0 ? channelSet[0] : null;
 
+      expect(busChannel).toBeDefined();
       if (busChannel && busChannel.onmessageerror) {
-        // Call onmessageerror to trigger line 104-108
-        // This will call createTabBusEvent (line 11-19) and create the error event
+        // Reset spy before calling
+        createTabBusEventSpy.mockClear();
+
+        // Call onmessageerror to trigger line 119-124
+        // This will call createTabBusEvent (line 120-122)
         busChannel.onmessageerror();
+
+        // Verify createTabBusEvent was called with correct arguments
+        expect(createTabBusEventSpy).toHaveBeenCalledWith('err', {
+          error: 'Failed to receive message',
+        });
+        expect(createTabBusEventSpy).toHaveBeenCalledTimes(1);
 
         // Verify it doesn't throw and can be called multiple times
         expect(() => {
           busChannel.onmessageerror();
         }).not.toThrow();
+
+        expect(createTabBusEventSpy).toHaveBeenCalledTimes(2);
       }
 
+      createTabBusEventSpy.mockRestore();
       bus.close();
     });
 
@@ -769,6 +785,36 @@ describe('TabBus', () => {
       expect(messageQueue.length).toBe(2); // Newest message dropped
       expect(messageQueue[0].type).toBe('msg1');
       expect(messageQueue[1].type).toBe('msg2');
+    });
+
+    it('should handle buffer overflow with oldest policy (drop_oldest action)', () => {
+      const state: InternalBusState = {
+        channel: null,
+        tabId: 'test-tab',
+        messageCallbacks: new Map(),
+        allCallbacks: new Set(),
+        messageResolvers: new Set(),
+        activeIterators: 1,
+        bufferSize: 2,
+        bufferOverflow: 'oldest',
+      };
+      const messageQueue: TabBusMessage[] = [
+        { type: 'msg1', tabId: 'tab-1', ts: Date.now() },
+        { type: 'msg2', tabId: 'tab-1', ts: Date.now() },
+      ];
+
+      const message: TabBusMessage = {
+        type: 'msg3',
+        tabId: 'test-tab',
+        ts: Date.now(),
+      };
+
+      handleBusMessage(message, 'test-tab', state, messageQueue);
+
+      // Oldest message (msg1) should be dropped, new message added
+      expect(messageQueue.length).toBe(2);
+      expect(messageQueue[0].type).toBe('msg2');
+      expect(messageQueue[1].type).toBe('msg3');
     });
   });
 });
