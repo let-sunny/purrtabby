@@ -49,9 +49,8 @@ class MockBroadcastChannel {
 
 export function setupBroadcastChannelMock(): void {
   if (typeof globalThis.BroadcastChannel === 'undefined') {
-    (
-      globalThis as typeof globalThis & { BroadcastChannel: typeof MockBroadcastChannel }
-    ).BroadcastChannel = MockBroadcastChannel;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).BroadcastChannel = MockBroadcastChannel;
   }
 }
 
