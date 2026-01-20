@@ -66,15 +66,6 @@
     "typescript-eslint": "^8.0.0",
     "vitest": "^2.0.0"
   },
-  "lint-staged": {
-    "*.{ts,js}": [
-      "eslint --fix",
-      "prettier --write"
-    ],
-    "*.{json,md}": [
-      "prettier --write"
-    ]
-  },
   "engines": {
     "node": ">=18.0.0"
   },
