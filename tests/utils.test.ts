@@ -110,7 +110,7 @@ describe('Utils', () => {
     });
 
     it('should handle empty callbacks set', () => {
-      const callbacks = new Set();
+      const callbacks = new Set<(arg: { test: string }) => void>();
       const arg = { test: 'data' };
 
       expect(() => executeCallbacks(callbacks, arg, 'Error:')).not.toThrow();

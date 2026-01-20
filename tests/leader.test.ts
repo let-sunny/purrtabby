@@ -64,9 +64,10 @@ describe('LeaderElector', () => {
     });
 
     it('should throw error if localStorage is not supported (line 211-212)', () => {
-      const originalLocalStorage = (globalThis as typeof globalThis & { localStorage?: Storage })
-        .localStorage;
-      delete (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage;
+      const globalThisWithLS = globalThis as typeof globalThis & { localStorage?: Storage };
+      const originalLocalStorage = globalThisWithLS.localStorage;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (globalThisWithLS as any).localStorage;
 
       expect(() => {
         createLeaderElector({

@@ -51,10 +51,10 @@ describe('TabBus', () => {
     });
 
     it('should throw error if BroadcastChannel is not supported (line 82-83)', () => {
-      const originalBroadcastChannel = (
-        globalThis as typeof globalThis & { BroadcastChannel?: unknown }
-      ).BroadcastChannel;
-      delete (globalThis as typeof globalThis & { BroadcastChannel?: unknown }).BroadcastChannel;
+      const globalThisWithBC = globalThis as typeof globalThis & { BroadcastChannel?: unknown };
+      const originalBroadcastChannel = globalThisWithBC.BroadcastChannel;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (globalThisWithBC as any).BroadcastChannel;
 
       expect(() => {
         createBus({ channel: 'test-channel' });
@@ -513,9 +513,9 @@ describe('TabBus', () => {
       await streamPromise;
 
       expect(messages).toHaveLength(3);
-      expect(messages[0].payload.order).toBe(1);
-      expect(messages[1].payload.order).toBe(2);
-      expect(messages[2].payload.order).toBe(3);
+      expect((messages[0].payload as { order: number }).order).toBe(1);
+      expect((messages[1].payload as { order: number }).order).toBe(2);
+      expect((messages[2].payload as { order: number }).order).toBe(3);
 
       bus1.close();
       bus2.close();
@@ -582,7 +582,9 @@ describe('TabBus', () => {
       const channelSet = Array.from(channels.get('test-channel-onerror') || new Set());
 
       // Find any channel in the set (all channels should have onmessageerror set)
-      const busChannel = channelSet.length > 0 ? channelSet[0] : null;
+      const busChannel = (channelSet.length > 0 ? channelSet[0] : null) as {
+        onmessageerror: (() => void) | null;
+      } | null;
 
       expect(busChannel).toBeDefined();
       if (busChannel && busChannel.onmessageerror) {
@@ -601,7 +603,10 @@ describe('TabBus', () => {
 
         // Verify it doesn't throw and can be called multiple times
         expect(() => {
-          busChannel.onmessageerror();
+          const onerror = busChannel.onmessageerror;
+          if (onerror) {
+            onerror();
+          }
         }).not.toThrow();
 
         expect(createTabBusEventSpy).toHaveBeenCalledTimes(2);
@@ -623,7 +628,9 @@ describe('TabBus', () => {
       ).BroadcastChannel;
       const channels = bc.channels || new Map();
       const channelSet = Array.from(channels.get('test-channel') || new Set());
-      const busChannel = channelSet.find((ch) => ch.onmessage);
+      const busChannel = channelSet.find(
+        (ch) => (ch as { onmessage: ((event: MessageEvent) => void) | null }).onmessage
+      ) as { onmessage: ((event: MessageEvent) => void) | null } | undefined;
 
       if (busChannel && busChannel.onmessage) {
         // Create event that throws when accessing data property
@@ -711,6 +718,8 @@ describe('TabBus', () => {
         allCallbacks: new Set(),
         messageResolvers: new Set(),
         activeIterators: 0,
+        bufferSize: 100,
+        bufferOverflow: 'oldest',
       };
       const messageQueue: TabBusMessage[] = [];
 

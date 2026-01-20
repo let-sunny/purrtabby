@@ -41,6 +41,8 @@ describe('busMessagesGenerator', () => {
       allCallbacks: new Set(),
       messageResolvers: new Set(),
       activeIterators: 0,
+      bufferSize: 100,
+      bufferOverflow: 'oldest',
     };
   });
 
@@ -118,6 +120,8 @@ describe('busMessagesGenerator', () => {
       allCallbacks: new Set(),
       messageResolvers: new Set(),
       activeIterators: 0,
+      bufferSize: 100,
+      bufferOverflow: 'oldest',
     };
 
     const generator = busMessagesGenerator(state, queue);
@@ -251,6 +255,8 @@ describe('leaderEventsGenerator', () => {
       eventResolvers: new Set(),
       activeIterators: 0,
       stopped: false,
+      bufferSize: 100,
+      bufferOverflow: 'oldest',
     };
   });
 
