@@ -5,7 +5,7 @@
   <br>
   <a href="https://www.npmjs.org/package/purrtabby"><img src="https://img.shields.io/npm/v/purrtabby.svg" alt="npm"></a>
   <img src="https://github.com/let-sunny/purrtabby/workflows/CI/badge.svg" alt="build status">
-  <a href="https://bundlephobia.com/package/purrtabby"><img src="https://img.shields.io/badge/bundle-2.1%20KB-blue?style=flat" alt="bundle size"></a>
+  <a href="https://bundlephobia.com/package/purrtabby"><img src="https://img.shields.io/badge/gzip-2.1%20KB-blue?style=flat" alt="bundle size (gzipped)"></a>
 </p>
 
 > Lightweight browser tab communication and leader election library using BroadcastChannel and localStorage
