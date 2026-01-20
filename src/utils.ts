@@ -1,4 +1,10 @@
-import type { TabBusEvent, TabBusEventType, LeaderEvent, LeaderEventType, BufferOverflowPolicy } from './types.js';
+import type {
+  TabBusEvent,
+  TabBusEventType,
+  LeaderEvent,
+  LeaderEventType,
+  BufferOverflowPolicy,
+} from './types.js';
 
 /**
  * Execute callbacks safely with error handling
@@ -12,7 +18,7 @@ export function executeCallbacks<T>(
   errorMessage: string
 ): void {
   if (!callbacks) return;
-  
+
   callbacks.forEach((callback) => {
     try {
       callback(arg);
@@ -38,7 +44,7 @@ export function generateTabId(): string {
  */
 export function createTabBusEvent(
   type: TabBusEventType,
-  meta?: Record<string, any>
+  meta?: Record<string, unknown>
 ): TabBusEvent {
   return {
     type,
@@ -55,7 +61,7 @@ export function createTabBusEvent(
  */
 export function createLeaderEvent(
   type: LeaderEventType,
-  meta?: Record<string, any>
+  meta?: Record<string, unknown>
 ): LeaderEvent {
   return {
     type,

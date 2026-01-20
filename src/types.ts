@@ -1,5 +1,5 @@
 /** TabBus message structure */
-export interface TabBusMessage<T = any> {
+export interface TabBusMessage<T = unknown> {
   type: string;
   payload?: T;
   tabId: string;
@@ -13,7 +13,7 @@ export type TabBusEventType = 'msg' | 'err';
 export interface TabBusEvent {
   type: TabBusEventType;
   ts: number;
-  meta?: Record<string, any>;
+  meta?: Record<string, unknown>;
 }
 
 /** Buffer overflow policy */
@@ -33,7 +33,7 @@ export interface BusOptions {
 }
 
 /** Return type of createBus(), provides async iterables and callbacks */
-export interface TabBus<T = any> {
+export interface TabBus<T = unknown> {
   /** Publish a message to all tabs */
   publish(type: string, payload?: T): void;
   /** Subscribe to messages of a specific type */
@@ -55,7 +55,7 @@ export type LeaderEventType = 'acquire' | 'lose' | 'change';
 export interface LeaderEvent {
   type: LeaderEventType;
   ts: number;
-  meta?: Record<string, any>;
+  meta?: Record<string, unknown>;
 }
 
 /** Options for createLeaderElector() */
@@ -87,7 +87,7 @@ export interface LeaderElector {
 }
 
 /** Internal state for TabBus */
-export interface InternalBusState<T = any> {
+export interface InternalBusState<T = unknown> {
   channel: BroadcastChannel | null;
   tabId: string;
   messageCallbacks: Map<string, Set<(message: TabBusMessage<T>) => void>>;
@@ -118,8 +118,8 @@ export interface InternalLeaderState {
 }
 
 /** Message queue for TabBus stream */
-export interface MessageQueue {
-  messages: TabBusMessage[];
+export interface MessageQueue<T = unknown> {
+  messages: TabBusMessage<T>[];
 }
 
 /** Event queue for LeaderElector stream */

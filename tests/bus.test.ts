@@ -1,8 +1,8 @@
 /**
  * bus.test.ts
- * 
+ *
  * Purpose: Tests for TabBus functionality including instance creation, messaging, subscriptions, streaming, and error handling
- * 
+ *
  * Test Coverage:
  * - TabBus instance creation and API existence verification
  * - Tab ID generation (auto-generated vs provided)
@@ -19,9 +19,10 @@ import { createBus } from '../src/index.js';
 import { handleBusMessage, handleBusMessageEvent } from '../src/bus.js';
 import { setupBroadcastChannelMock, cleanupBroadcastChannelMock } from './helpers.js';
 import type { InternalBusState, TabBusMessage } from '../src/types.js';
+import * as utils from '../src/utils.js';
 
 describe('TabBus', () => {
-  let consoleErrorSpy: any;
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -50,15 +51,18 @@ describe('TabBus', () => {
     });
 
     it('should throw error if BroadcastChannel is not supported (line 82-83)', () => {
-      const originalBroadcastChannel = (globalThis as any).BroadcastChannel;
-      delete (globalThis as any).BroadcastChannel;
-      
+      const originalBroadcastChannel = (
+        globalThis as typeof globalThis & { BroadcastChannel?: unknown }
+      ).BroadcastChannel;
+      delete (globalThis as typeof globalThis & { BroadcastChannel?: unknown }).BroadcastChannel;
+
       expect(() => {
         createBus({ channel: 'test-channel' });
       }).toThrow('BroadcastChannel is not supported in this environment');
-      
+
       // Restore
-      (globalThis as any).BroadcastChannel = originalBroadcastChannel;
+      (globalThis as typeof globalThis & { BroadcastChannel?: unknown }).BroadcastChannel =
+        originalBroadcastChannel;
     });
 
     it('should generate unique tab IDs', () => {
@@ -91,9 +95,9 @@ describe('TabBus', () => {
       const bus = createBus({ channel: 'test-channel' });
       const tabId = bus.getTabId();
       expect(tabId).toBeDefined();
-      
+
       bus.close();
-      
+
       expect(bus.getTabId()).toBe(tabId);
       expect(() => bus.close()).not.toThrow();
     });
@@ -127,7 +131,7 @@ describe('TabBus', () => {
 
     it('should receive own messages (leader-follower pattern)', async () => {
       vi.useRealTimers();
-      
+
       const bus = createBus({ channel: 'test-channel' });
       let received = false;
       let receivedCount = 0;
@@ -149,20 +153,20 @@ describe('TabBus', () => {
       // Now receives own messages (for leader-follower pattern)
       expect(received).toBe(true);
       expect(receivedCount).toBe(2); // subscribe + subscribeAll
-      
+
       unsubscribe();
       unsubscribeAll();
       bus.close();
-      
+
       vi.useFakeTimers();
     });
 
     it('should receive own messages in onmessage handler', async () => {
       vi.useRealTimers();
-      
+
       const bus1 = createBus({ channel: 'test-channel' });
       const bus2 = createBus({ channel: 'test-channel' });
-      
+
       let bus2Received = 0;
       let bus1Received = 0;
 
@@ -174,48 +178,48 @@ describe('TabBus', () => {
         bus2Received++;
       });
 
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       bus1.publish('test-type', { data: 'test' });
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(bus2Received).toBe(1); // bus2 receives from bus1
       expect(bus1Received).toBe(1); // bus1 receives own message
 
       bus2.publish('test-type', { data: 'test2' });
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(bus1Received).toBe(2); // bus1 receives from bus2 + own message
       expect(bus2Received).toBe(2); // bus2 receives own message + from bus1
 
       bus1.close();
       bus2.close();
-      
+
       vi.useFakeTimers();
     });
 
     it('should receive own messages (leader-follower pattern)', async () => {
       vi.useRealTimers();
-      
+
       const bus = createBus({ channel: 'test-channel' });
-      const tabId = bus.getTabId();
+      const _tabId = bus.getTabId();
       let received = false;
 
       bus.subscribe('test-type', () => {
         received = true;
       });
 
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       // Publish own message
       bus.publish('test-type', { data: 'test' });
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       // Should receive own message (for leader-follower pattern)
       expect(received).toBe(true);
 
       bus.close();
-      
+
       vi.useFakeTimers();
     });
 
@@ -310,7 +314,7 @@ describe('TabBus', () => {
   describe('Subscription Management', () => {
     it('should unsubscribe correctly', async () => {
       vi.useRealTimers();
-      
+
       const bus1 = createBus({ channel: 'test-channel' });
       const bus2 = createBus({ channel: 'test-channel' });
 
@@ -326,14 +330,14 @@ describe('TabBus', () => {
       expect(callCount).toBe(1);
 
       unsubscribe();
-      
+
       bus1.publish('test-type', { data: 'test2' });
       await new Promise((resolve) => setTimeout(resolve, 10));
       expect(callCount).toBe(1);
 
       bus1.close();
       bus2.close();
-      
+
       vi.useFakeTimers();
     });
 
@@ -365,7 +369,7 @@ describe('TabBus', () => {
 
     it('should unsubscribe from subscribeAll correctly', async () => {
       vi.useRealTimers();
-      
+
       const bus1 = createBus({ channel: 'test-channel' });
       const bus2 = createBus({ channel: 'test-channel' });
 
@@ -388,13 +392,13 @@ describe('TabBus', () => {
 
       bus1.close();
       bus2.close();
-      
+
       vi.useFakeTimers();
     });
 
     it('should handle multiple subscriptions independently', async () => {
       vi.useRealTimers();
-      
+
       const bus1 = createBus({ channel: 'test-channel' });
       const bus2 = createBus({ channel: 'test-channel' });
 
@@ -430,18 +434,18 @@ describe('TabBus', () => {
       unsubscribe2();
       bus1.close();
       bus2.close();
-      
+
       vi.useFakeTimers();
     });
 
     it('should allow multiple unsubscribe calls', () => {
       const bus = createBus({ channel: 'test-channel' });
       const unsubscribe = bus.subscribe('test-type', () => {});
-      
+
       expect(() => unsubscribe()).not.toThrow();
       expect(() => unsubscribe()).not.toThrow();
       expect(() => unsubscribe()).not.toThrow();
-      
+
       bus.close();
     });
   });
@@ -449,11 +453,11 @@ describe('TabBus', () => {
   describe('Stream', () => {
     it('should stream messages', async () => {
       vi.useRealTimers();
-      
+
       const bus1 = createBus({ channel: 'test-channel' });
       const bus2 = createBus({ channel: 'test-channel' });
 
-      const messages: any[] = [];
+      const messages: TabBusMessage[] = [];
 
       const streamPromise = (async () => {
         for await (const message of bus2.stream()) {
@@ -462,13 +466,13 @@ describe('TabBus', () => {
         }
       })();
 
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       bus1.publish('type1', { data: 'test1' });
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       bus1.publish('type2', { data: 'test2' });
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       await streamPromise;
 
@@ -480,14 +484,13 @@ describe('TabBus', () => {
       bus2.close();
     });
 
-
     it('should stream messages in order', async () => {
       vi.useRealTimers();
-      
+
       const bus1 = createBus({ channel: 'test-channel' });
       const bus2 = createBus({ channel: 'test-channel' });
 
-      const messages: any[] = [];
+      const messages: TabBusMessage[] = [];
 
       const streamPromise = (async () => {
         for await (const message of bus2.stream()) {
@@ -496,16 +499,16 @@ describe('TabBus', () => {
         }
       })();
 
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       bus1.publish('type1', { order: 1 });
-      await new Promise(resolve => setTimeout(resolve, 5));
+      await new Promise((resolve) => setTimeout(resolve, 5));
 
       bus1.publish('type2', { order: 2 });
-      await new Promise(resolve => setTimeout(resolve, 5));
+      await new Promise((resolve) => setTimeout(resolve, 5));
 
       bus1.publish('type3', { order: 3 });
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       await streamPromise;
 
@@ -522,20 +525,20 @@ describe('TabBus', () => {
   describe('Error Handling', () => {
     it('should handle errors in message callback', async () => {
       vi.useRealTimers();
-      
+
       const bus1 = createBus({ channel: 'test-channel' });
       const bus2 = createBus({ channel: 'test-channel' });
 
       const error = new Error('Test error');
-      
+
       bus2.subscribe('test-type', () => {
         throw error;
       });
 
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       bus1.publish('test-type', { data: 'test' });
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(consoleErrorSpy).toHaveBeenCalledWith('Error in TabBus callback:', error);
 
@@ -545,20 +548,20 @@ describe('TabBus', () => {
 
     it('should handle errors in subscribeAll callback', async () => {
       vi.useRealTimers();
-      
+
       const bus1 = createBus({ channel: 'test-channel' });
       const bus2 = createBus({ channel: 'test-channel' });
 
       const error = new Error('Test error');
-      
+
       bus2.subscribeAll(() => {
         throw error;
       });
 
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       bus1.publish('test-type', { data: 'test' });
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(consoleErrorSpy).toHaveBeenCalledWith('Error in TabBus all callback:', error);
 
@@ -566,49 +569,74 @@ describe('TabBus', () => {
       bus2.close();
     });
 
-    it('should handle onmessageerror (line 104-108)', () => {
-      const bus = createBus({ channel: 'test-channel' });
-      
-      const bc = (globalThis as any).BroadcastChannel;
+    it('should handle onmessageerror (line 119-124)', () => {
+      const createTabBusEventSpy = vi.spyOn(utils, 'createTabBusEvent');
+      const bus = createBus({ channel: 'test-channel-onerror' });
+
+      const bc = (
+        globalThis as typeof globalThis & {
+          BroadcastChannel: { channels: Map<string, Set<{ onmessageerror: (() => void) | null }>> };
+        }
+      ).BroadcastChannel;
       const channels = bc.channels || new Map();
-      const channelSet = Array.from(channels.get('test-channel') || new Set());
-      
-      const busChannel = channelSet.find((ch: any) => ch.onmessageerror);
-      
+      const channelSet = Array.from(channels.get('test-channel-onerror') || new Set());
+
+      // Find any channel in the set (all channels should have onmessageerror set)
+      const busChannel = channelSet.length > 0 ? channelSet[0] : null;
+
+      expect(busChannel).toBeDefined();
       if (busChannel && busChannel.onmessageerror) {
-        // Call onmessageerror to trigger line 104-108
-        // This will call createTabBusEvent (line 11-19) and create the error event
+        // Reset spy before calling
+        createTabBusEventSpy.mockClear();
+
+        // Call onmessageerror to trigger line 119-124
+        // This will call createTabBusEvent (line 120-122)
         busChannel.onmessageerror();
-        
+
+        // Verify createTabBusEvent was called with correct arguments
+        expect(createTabBusEventSpy).toHaveBeenCalledWith('err', {
+          error: 'Failed to receive message',
+        });
+        expect(createTabBusEventSpy).toHaveBeenCalledTimes(1);
+
         // Verify it doesn't throw and can be called multiple times
         expect(() => {
           busChannel.onmessageerror();
         }).not.toThrow();
+
+        expect(createTabBusEventSpy).toHaveBeenCalledTimes(2);
       }
 
+      createTabBusEventSpy.mockRestore();
       bus.close();
     });
 
     it('should handle message parsing errors (line 68-73)', () => {
       const bus = createBus({ channel: 'test-channel' });
-      
-      const bc = (globalThis as any).BroadcastChannel;
+
+      const bc = (
+        globalThis as typeof globalThis & {
+          BroadcastChannel: {
+            channels: Map<string, Set<{ onmessage: ((event: MessageEvent) => void) | null }>>;
+          };
+        }
+      ).BroadcastChannel;
       const channels = bc.channels || new Map();
       const channelSet = Array.from(channels.get('test-channel') || new Set());
-      const busChannel = channelSet.find((ch: any) => ch.onmessage);
-      
+      const busChannel = channelSet.find((ch) => ch.onmessage);
+
       if (busChannel && busChannel.onmessage) {
         // Create event that throws when accessing data property
         // This will trigger catch block in handleBusMessageEvent (line 68-73)
         const errorEvent = {
           get data() {
             throw new Error('Test parsing error');
-          }
-        } as any;
-        
+          },
+        } as MessageEvent;
+
         // Call onmessage handler directly - should catch error (line 68-73)
         busChannel.onmessage(errorEvent);
-        
+
         // Verify catch block was executed (line 72)
         expect(consoleErrorSpy).toHaveBeenCalledWith(
           'Error handling TabBus message',
@@ -621,7 +649,7 @@ describe('TabBus', () => {
 
     it('should continue processing after callback error', async () => {
       vi.useRealTimers();
-      
+
       const bus1 = createBus({ channel: 'test-channel' });
       const bus2 = createBus({ channel: 'test-channel' });
 
@@ -637,10 +665,10 @@ describe('TabBus', () => {
         successCount++;
       });
 
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       bus1.publish('test-type', { data: 'test' });
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(errorCount).toBe(1);
       expect(successCount).toBe(1);
@@ -661,16 +689,16 @@ describe('TabBus', () => {
         bufferOverflow: 'oldest',
       };
       const messageQueue: TabBusMessage[] = [];
-      
+
       const message: TabBusMessage = {
         type: 'test',
         tabId: 'test-tab', // Same as state.tabId
         ts: Date.now(),
       };
-      
+
       // Should process own message (for leader-follower pattern)
       handleBusMessage(message, 'test-tab', state, messageQueue);
-      
+
       // Verify message was added to queue
       expect(messageQueue.length).toBe(1);
     });
@@ -685,17 +713,17 @@ describe('TabBus', () => {
         activeIterators: 0,
       };
       const messageQueue: TabBusMessage[] = [];
-      
+
       // Create event that throws when accessing data
       const errorEvent = {
         get data() {
           throw new Error('Test error');
-        }
-      } as any;
-      
+        },
+      } as MessageEvent;
+
       // Should catch error (line 72-73)
       handleBusMessageEvent(errorEvent, 'test-tab', state, messageQueue);
-      
+
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         'Error handling TabBus message:',
         expect.any(Error)
@@ -717,15 +745,15 @@ describe('TabBus', () => {
         { type: 'msg1', tabId: 'tab-1', ts: Date.now() },
         { type: 'msg2', tabId: 'tab-1', ts: Date.now() },
       ];
-      
+
       const message: TabBusMessage = {
         type: 'msg3',
         tabId: 'test-tab',
         ts: Date.now(),
       };
-      
+
       handleBusMessage(message, 'test-tab', state, messageQueue);
-      
+
       expect(consoleErrorSpy).toHaveBeenCalledWith('Message buffer overflow');
       expect(messageQueue.length).toBe(2); // No new message added
     });
@@ -745,18 +773,48 @@ describe('TabBus', () => {
         { type: 'msg1', tabId: 'tab-1', ts: Date.now() },
         { type: 'msg2', tabId: 'tab-1', ts: Date.now() },
       ];
-      
+
       const message: TabBusMessage = {
         type: 'msg3',
         tabId: 'test-tab',
         ts: Date.now(),
       };
-      
+
       handleBusMessage(message, 'test-tab', state, messageQueue);
-      
+
       expect(messageQueue.length).toBe(2); // Newest message dropped
       expect(messageQueue[0].type).toBe('msg1');
       expect(messageQueue[1].type).toBe('msg2');
+    });
+
+    it('should handle buffer overflow with oldest policy (drop_oldest action)', () => {
+      const state: InternalBusState = {
+        channel: null,
+        tabId: 'test-tab',
+        messageCallbacks: new Map(),
+        allCallbacks: new Set(),
+        messageResolvers: new Set(),
+        activeIterators: 1,
+        bufferSize: 2,
+        bufferOverflow: 'oldest',
+      };
+      const messageQueue: TabBusMessage[] = [
+        { type: 'msg1', tabId: 'tab-1', ts: Date.now() },
+        { type: 'msg2', tabId: 'tab-1', ts: Date.now() },
+      ];
+
+      const message: TabBusMessage = {
+        type: 'msg3',
+        tabId: 'test-tab',
+        ts: Date.now(),
+      };
+
+      handleBusMessage(message, 'test-tab', state, messageQueue);
+
+      // Oldest message (msg1) should be dropped, new message added
+      expect(messageQueue.length).toBe(2);
+      expect(messageQueue[0].type).toBe('msg2');
+      expect(messageQueue[1].type).toBe('msg3');
     });
   });
 });

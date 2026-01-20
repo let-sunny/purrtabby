@@ -5,7 +5,7 @@
   <br>
   <a href="https://www.npmjs.org/package/purrtabby"><img src="https://img.shields.io/npm/v/purrtabby.svg" alt="npm"></a>
   <img src="https://github.com/let-sunny/purrtabby/workflows/CI/badge.svg" alt="build status">
-  <a href="https://unpkg.com/purrtabby/dist/index.global.js"><img src="https://img.badgesize.io/https://unpkg.com/purrtabby/dist/index.global.js?compression=gzip" alt="gzip size"></a>
+  <a href="https://bundlephobia.com/package/purrtabby"><img src="https://img.shields.io/badge/gzip-2.1%20KB-blue?style=flat" alt="bundle size (gzipped)"></a>
 </p>
 
 > Lightweight browser tab communication and leader election library using BroadcastChannel and localStorage
@@ -14,7 +14,7 @@ A lightweight library for cross-tab communication and leader election in browser
 
 ## Highlights
 
-**Microscopic**: weighs less than 7KB minified (~3KB gzipped)
+**Microscopic**: weighs 6.3KB minified (2.1KB gzipped)
 
 **Reliable**: leader election with lease-based heartbeat mechanism
 
@@ -34,7 +34,7 @@ Try purrtabby in your browser with our interactive demo. Test cross-tab communic
 
 ## 📚 Documentation
 
-**[Architecture Documentation →](./docs/ARCHITECTURE.md)** 
+**[Architecture Documentation →](./docs/ARCHITECTURE.md)**
 
 Learn about purrtabby's internal architecture and design decisions.
 
@@ -67,11 +67,13 @@ Learn about purrtabby's internal architecture and design decisions.
 ## Installation
 
 **npm:**
+
 ```bash
 npm install purrtabby
 ```
 
 **UMD build (via unpkg):**
+
 ```html
 <script src="https://unpkg.com/purrtabby/dist/index.global.js"></script>
 ```
@@ -79,10 +81,12 @@ npm install purrtabby
 ### Requirements
 
 **Runtime:**
+
 - **Browser**: Modern browsers with BroadcastChannel and localStorage support
 - **Node.js**: Not supported (requires browser APIs)
 
 **Development:**
+
 - **Node.js**: 24.13.0 (tested with this version)
 
 ## Usage
@@ -123,9 +127,9 @@ import { createLeaderElector } from 'purrtabby';
 const leader = createLeaderElector({
   key: 'my-app-leader',
   tabId: 'tab-1', // Optional: auto-generated if not provided
-  leaseMs: 5000,  // Lease duration in milliseconds
+  leaseMs: 5000, // Lease duration in milliseconds
   heartbeatMs: 2000, // Heartbeat interval
-  jitterMs: 500,  // Jitter to avoid thundering herd
+  jitterMs: 500, // Jitter to avoid thundering herd
 });
 
 // Start leader election
@@ -256,10 +260,10 @@ Creates a new TabBus instance for cross-tab communication.
 
 #### Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `channel` | `string` | **required** | BroadcastChannel name |
-| `tabId` | `string` | auto-generated | Unique tab identifier |
+| Option    | Type     | Default        | Description           |
+| --------- | -------- | -------------- | --------------------- |
+| `channel` | `string` | **required**   | BroadcastChannel name |
+| `tabId`   | `string` | auto-generated | Unique tab identifier |
 
 #### TabBus Methods
 
@@ -315,16 +319,17 @@ Creates a new LeaderElector instance for leader election.
 
 #### Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `key` | `string` | **required** | localStorage key for leader lease |
-| `tabId` | `string` | **required** | Unique tab identifier |
-| `leaseMs` | `number` | `5000` | Lease duration in milliseconds |
-| `heartbeatMs` | `number` | `2000` | Heartbeat interval in milliseconds |
-| `jitterMs` | `number` | `500` | Jitter range to avoid synchronization |
-| `buffer` | `BufferConfig` | `{ size: 100, overflow: 'oldest' }` | Buffer configuration for stream generators |
+| Option        | Type           | Default                             | Description                                |
+| ------------- | -------------- | ----------------------------------- | ------------------------------------------ |
+| `key`         | `string`       | **required**                        | localStorage key for leader lease          |
+| `tabId`       | `string`       | **required**                        | Unique tab identifier                      |
+| `leaseMs`     | `number`       | `5000`                              | Lease duration in milliseconds             |
+| `heartbeatMs` | `number`       | `2000`                              | Heartbeat interval in milliseconds         |
+| `jitterMs`    | `number`       | `500`                               | Jitter range to avoid synchronization      |
+| `buffer`      | `BufferConfig` | `{ size: 100, overflow: 'oldest' }` | Buffer configuration for stream generators |
 
 **BufferConfig:**
+
 - `size`: Maximum queue size (default: 100)
 - `overflow`: Overflow policy - `'oldest'` (drop oldest), `'newest'` (drop newest), or `'error'` (throw error)
 
@@ -347,6 +352,7 @@ Returns `true` if this tab is currently the leader.
 Subscribes to a specific leader event. Returns an unsubscribe function.
 
 Events:
+
 - `'acquire'` - This tab became the leader
 - `'lose'` - This tab lost leadership
 - `'change'` - Leadership changed to another tab
@@ -398,7 +404,7 @@ leader.on('lose', () => {
 // Listen for messages from other tabs
 bus.subscribe('user-action', (message) => {
   console.log('User action from tab:', message.tabId, message.payload);
-  
+
   // If we're the leader, process the action
   if (leader.isLeader()) {
     console.log('Processing action as leader');
